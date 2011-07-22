@@ -1,0 +1,13 @@
+<launch>
+    <node name="chessboard_detector" pkg="pattern_pose_estimation" type="chessboard_detector_node" output="screen">
+
+        <remap from="image" to="/forward_stereo_camera/left/image_rect" />
+
+        <param name="cols" value="8" />
+        <param name="rows" value="6" />
+        <param name="size" value="0.028" />
+        <param name="calibrated" value="true" />
+    </node>
+
+
+</launch>

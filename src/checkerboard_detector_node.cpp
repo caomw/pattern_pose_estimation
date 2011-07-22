@@ -13,7 +13,7 @@
 
 
 
-class ChessPoseSensor
+class CheckerboardDetector
 {
 private:
   
@@ -22,74 +22,71 @@ private:
   image_transport::ImageTransport it_;
   image_transport::CameraSubscriber camera_sub_;
   ros::Publisher pose_pub_;
-  tf::TransformBroadcaster tfbr_;
+  tf::TransformBroadcaster tf_broadcaster_;
     
-  std::vector<cv::Point3f> points3d_;
-  bool calibrated_;
-  int cols_, rows_, num_points_;
+  std::vector<cv::Point3f> points3d_; // known 3D points
+  bool calibrated_; // is input image calibrated ?
+  // pattern params
+  int cols_, rows_;
   double square_size_;
+
+  bool show_detection_; // draw detection on screen?
   
 public:
 
-  ChessPoseSensor()
+  CheckerboardDetector()
   : nh_(), nh_priv_("~"), it_(nh_)
-  {}
+  {
+      init();
+  }
 
   void init()
   {
-    nh_priv_.param("cols",cols_,8);
-    nh_priv_.param("rows",rows_,6);
-    nh_priv_.param("size",square_size_,0.06);
-    nh_priv_.param("calibrated",calibrated_,false);
-    num_points_ = rows_*cols_;
+    nh_priv_.param("cols", cols_, 8);
+    nh_priv_.param("rows", rows_, 6);
+    nh_priv_.param("size", square_size_, 0.06);
+    nh_priv_.param("calibrated", calibrated_, false);
+    nh_priv_.param("show_detection", show_detection_, false);
+    ROS_INFO_STREAM("Calibrated is set to " << calibrated_);
+    ROS_INFO_STREAM("Calibration pattern parameters: " << rows_ << "x" << cols_ << ", size is " << square_size_);
     for (int i=0; i<rows_; i++)
       for(int j=0; j<cols_; j++)
         points3d_.push_back(cv::Point3f(j*square_size_,i*square_size_,0.0));
 
-    camera_sub_ = it_.subscribeCamera("image", 1, &ChessPoseSensor::detect, this);
+    ROS_INFO_STREAM("Subscribing to image ropic " << nh_.resolveName("image"));
+    camera_sub_ = it_.subscribeCamera("image", 1, &CheckerboardDetector::detect, this);
 
-    pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("pattern_pose", 1);
+    pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("checkerboard_pose", 1);
   }
   
-  void report(const cv::Mat& t_vec, const cv::Mat& r_vec, 
-          const cv::Mat& r_qua, const cv::Mat& r_mat)
+  void report(const cv::Mat& t_vec, const cv::Mat& r_vec, const cv::Mat& r_mat)
   {
-    std::cout << "Current chess board pose is:\n";
+    std::cout << "Current checkerboard pose is:\n";
     std::cout << "Rv = [ " << r_vec.at<double>(0,0) << " " << r_vec.at<double>(1,0) << " " << r_vec.at<double>(2,0) << " ]\n";
-    std::cout << "Rq = [ " << r_qua.at<double>(0,0) << " " << r_qua.at<double>(1,0) << " " << r_qua.at<double>(2,0) << r_qua.at<double>(3,0) << " ]\n";
     std::cout << "R  = [ " << r_mat.at<double>(0,0) << " " << r_mat.at<double>(0,1) << " " << r_mat.at<double>(0,2) << " ]\n"; 
     std::cout << "     [ " << r_mat.at<double>(1,0) << " " << r_mat.at<double>(1,1) << " " << r_mat.at<double>(1,2) << " ]\n";
     std::cout << "     [ " << r_mat.at<double>(2,0) << " " << r_mat.at<double>(2,1) << " " << r_mat.at<double>(2,2) << " ]\n"; 
     std::cout << "T  = [ " << t_vec.at<double>(0,0) << " " << t_vec.at<double>(1,0) << " " << t_vec.at<double>(2,0) << " ]\n";
   }
   
-  void sendMessageAndTransform(const cv::Mat& t_vec, const cv::Mat& r_quat, const ros::Time& stamp)
+  void sendMessageAndTransform(const cv::Mat& t_vec, const cv::Mat& r_vec, const ros::Time& stamp, const std::string& camera_frame_id)
   {
-    geometry_msgs::Quaternion quat;
-    quat.w = r_quat.at<double>(0,0);
-    quat.x = r_quat.at<double>(1,0);
-    quat.y = r_quat.at<double>(2,0);
-    quat.z = r_quat.at<double>(3,0);
+    tf::Vector3 axis(r_vec.at<double>(0, 0), r_vec.at<double>(1, 0), r_vec.at<double>(2, 0));
+    double angle = cv::norm(r_vec);
+    tf::Quaternion quaternion(axis, angle);
+    
+    tf::Vector3 translation(t_vec.at<double>(0, 0), t_vec.at<double>(1, 0), t_vec.at<double>(2, 0));
+
+    tf::Transform transform(quaternion, translation);
+    tf::StampedTransform stamped_transform(transform, stamp, camera_frame_id, "checkerboard");
+    tf_broadcaster_.sendTransform(stamped_transform);
 
     geometry_msgs::PoseStamped pose_msg;
     pose_msg.header.stamp = stamp;
-    pose_msg.header.frame_id = "camera";
-    pose_msg.pose.position.x = t_vec.at<double>(0,0);
-    pose_msg.pose.position.y = t_vec.at<double>(1,0);
-    pose_msg.pose.position.z = t_vec.at<double>(2,0);
-    pose_msg.pose.orientation = quat;
-    
-    pose_pub_.publish(pose_msg);
+    pose_msg.header.frame_id = camera_frame_id;
+    tf::poseTFToMsg(transform, pose_msg.pose);
 
-    /*
-    tf_.header.stamp = stamp;
-    tf_.header.frame_id = "camera";
-    tf_.child_frame_id = "chessboard";
-    tf_.setOrigin( tf::Vector3(t_vec.at<double>(0,0), t_vec.at<double>(1,0), t_vec.at<double>(2,0) ) );
-    tf_.setRotation(quat);
-    
-    tfbr_.sendTransform(tf_);
-    */
+    pose_pub_.publish(pose_msg);
   }
   
   void detect(const sensor_msgs::ImageConstPtr& image, 
@@ -106,40 +103,44 @@ public:
     bool success = cv::findChessboardCorners(mat, cv::Size(cols_, rows_), corners);
     if (!success)
     {
-      ROS_WARN_STREAM("Chessboard not detected");
+      ROS_WARN_STREAM("Checkerboard not detected");
       return;
     }
     cv::cornerSubPix(mat, corners, cv::Size(5,5), cv::Size(-1,-1), 
             cv::TermCriteria(CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
-    cv::Mat K(3,3, CV_64FC1, cam_info->P[0]);
-    cv::Mat D(4,1, CV_64FC1, cam_info->D[0]);
+    const cv::Mat K(3,3, CV_64FC1, const_cast<double*>(cam_info->K.data()));
+    const cv::Mat D(4,1, CV_64FC1, const_cast<double*>(cam_info->D.data()));
     cv::Mat t_vec(3,1,CV_64FC1);
     cv::Mat r_vec(3,1,CV_64FC1);
     cv::Mat r_mat(3,3,CV_64FC1);
-    cv::Mat r_qua(3,1,CV_64FC1);
     cv::Mat points_mat(points3d_);
     cv::Mat corners_mat(corners);
     if (calibrated_)
-      cv::solvePnP(points_mat, corners_mat, K, D, t_vec, r_vec);
+      cv::solvePnP(points_mat, corners_mat, K, cv::Mat(), r_vec, t_vec);
     else
-      cv::solvePnP(points_mat, corners_mat, K, cv::Mat(), t_vec, r_vec);
+      cv::solvePnP(points_mat, corners_mat, K, D, r_vec, t_vec);
     cv::Rodrigues(r_vec, r_mat);
-    cv::Mat r_quat = cv::Mat::zeros(4, 1, CV_64F);
-    report(t_vec, r_vec, r_quat, r_mat);
+
+    report(t_vec, r_vec, r_mat);
     ros::Time stamp = image->header.stamp;
     if (stamp.toSec()==0.0)
       stamp = ros::Time::now();
-    sendMessageAndTransform(t_vec, r_quat, stamp);
-    cv::Mat draw = mat.clone();
-    cv::drawChessboardCorners(draw, cv::Size(cols_,rows_), corners, true);
-    cv::imshow("chessboard", draw);
-    cv::waitKey(5);
+    sendMessageAndTransform(t_vec, r_vec, stamp, image->header.frame_id);
+
+    if (show_detection_)
+    {
+        cv::Mat draw;
+        cv::cvtColor(mat, draw, CV_GRAY2BGR);
+        cv::drawChessboardCorners(draw, cv::Size(cols_,rows_), corners, true);
+        cv::imshow("checkerboard", draw);
+        cv::waitKey(5);
+    }
   }
 };
 
 int main(int argc, char* argv[])
 {
-  ros::init(argc,argv,"pattern_pose_node");
-  ChessPoseSensor cps;
+  ros::init(argc,argv,"checkerboard_detector");
+  CheckerboardDetector cbd;
   ros::spin();
 }
