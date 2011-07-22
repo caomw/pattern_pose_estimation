@@ -1,5 +1,5 @@
 <launch>
-    <node name="chessboard_detector" pkg="pattern_pose_estimation" type="chessboard_detector_node" output="screen">
+    <node name="chessboard_detector" pkg="pattern_pose_estimation" type="checkerboard_detector_node" output="screen">
 
         <remap from="image" to="/forward_stereo_camera/left/image_rect" />
 
