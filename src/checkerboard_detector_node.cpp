@@ -12,6 +12,7 @@
 #include <iostream>
 
 
+static const char* WINDOW_NAME = "Checkerboard Detection";
 
 class CheckerboardDetector
 {
@@ -45,7 +46,7 @@ public:
     nh_priv_.param("cols", cols_, 8);
     nh_priv_.param("rows", rows_, 6);
     nh_priv_.param("size", square_size_, 0.06);
-    nh_priv_.param("calibrated", calibrated_, false);
+    nh_priv_.param("calibrated", calibrated_, true);
     nh_priv_.param("show_detection", show_detection_, false);
     ROS_INFO_STREAM("Calibrated is set to " << calibrated_);
     ROS_INFO_STREAM("Calibration pattern parameters: " << rows_ << "x" << cols_ << ", size is " << square_size_);
@@ -57,6 +58,7 @@ public:
     camera_sub_ = it_.subscribeCamera("image", 1, &CheckerboardDetector::detect, this);
 
     pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("checkerboard_pose", 1);
+    cv::namedWindow(WINDOW_NAME, 0);
   }
   
   void report(const cv::Mat& t_vec, const cv::Mat& r_vec, const cv::Mat& r_mat)
@@ -104,6 +106,11 @@ public:
     if (!success)
     {
       ROS_WARN_STREAM("Checkerboard not detected");
+      if (show_detection_)
+      {
+           cv::imshow(WINDOW_NAME, mat);
+           cv::waitKey(5);
+      }
       return;
     }
     cv::cornerSubPix(mat, corners, cv::Size(5,5), cv::Size(-1,-1), 
@@ -132,7 +139,7 @@ public:
         cv::Mat draw;
         cv::cvtColor(mat, draw, CV_GRAY2BGR);
         cv::drawChessboardCorners(draw, cv::Size(cols_,rows_), corners, true);
-        cv::imshow("checkerboard", draw);
+        cv::imshow(WINDOW_NAME, draw);
         cv::waitKey(5);
     }
   }
