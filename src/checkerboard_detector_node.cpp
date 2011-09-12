@@ -8,6 +8,7 @@
 #include <sensor_msgs/image_encodings.h>
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
+#include <cv_bridge/cv_bridge.h>
 
 #include <iostream>
 
@@ -94,13 +95,17 @@ public:
   void detect(const sensor_msgs::ImageConstPtr& image, 
           const sensor_msgs::CameraInfoConstPtr& cam_info)
   { 
+    cv_bridge::CvImageConstPtr cv_image = cv_bridge::toCvShare(image, "mono8");
+    /*
     namespace enc = sensor_msgs::image_encodings;
     const std::string& encoding = image->encoding;
     int image_type = CV_8UC1;
     if (encoding == enc::BGR8 || encoding == enc::RGB8)
       image_type = CV_8UC3;
-    const cv::Mat mat(image->height, image->width, image_type,
-                      const_cast<uint8_t*>(&image->data[0]), image->step);
+      */
+    const cv::Mat& mat = cv_image->image;
+    //const cv::Mat mat(image->height, image->width, image_type,
+    //                  const_cast<uint8_t*>(&image->data[0]), image->step);
     std::vector<cv::Point2f> corners;
     bool success = cv::findChessboardCorners(mat, cv::Size(cols_, rows_), corners);
     if (!success)
@@ -114,18 +119,28 @@ public:
       return;
     }
     cv::cornerSubPix(mat, corners, cv::Size(5,5), cv::Size(-1,-1), 
-            cv::TermCriteria(CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
-    const cv::Mat K(3,3, CV_64FC1, const_cast<double*>(cam_info->K.data()));
-    const cv::Mat D(4,1, CV_64FC1, const_cast<double*>(cam_info->D.data()));
+        cv::TermCriteria(CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
     cv::Mat t_vec(3,1,CV_64FC1);
     cv::Mat r_vec(3,1,CV_64FC1);
     cv::Mat r_mat(3,3,CV_64FC1);
     cv::Mat points_mat(points3d_);
     cv::Mat corners_mat(corners);
     if (calibrated_)
-      cv::solvePnP(points_mat, corners_mat, K, cv::Mat(), r_vec, t_vec);
+    {
+        const cv::Mat P(3,4, CV_64FC1, const_cast<double*>(cam_info->P.data()));
+        // We have to take K' here extracted from P to take the R|t into account
+        // that was performed during rectification.
+        // This way we obtain the pattern pose with respect to the same frame that
+        // is used in stereo depth calculation.
+        const cv::Mat K_prime = P.colRange(cv::Range(0,3));
+        cv::solvePnP(points_mat, corners_mat, K_prime, cv::Mat(), r_vec, t_vec);
+    }
     else
-      cv::solvePnP(points_mat, corners_mat, K, D, r_vec, t_vec);
+    {
+        const cv::Mat K(3,3, CV_64FC1, const_cast<double*>(cam_info->K.data()));
+        const cv::Mat D(4,1, CV_64FC1, const_cast<double*>(cam_info->D.data()));
+        cv::solvePnP(points_mat, corners_mat, K, D, r_vec, t_vec);
+    }
     cv::Rodrigues(r_vec, r_mat);
 
     report(t_vec, r_vec, r_mat);
