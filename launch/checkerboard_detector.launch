@@ -1,11 +1,12 @@
 <launch>
-    <node name="chessboard_detector" pkg="pattern_pose_estimation" type="checkerboard_detector_node" output="screen">
+    <arg name="image" default="camera_flex_narrow/left/image_rect" />
+    <node name="$(anon chessboard_detector)" pkg="pattern_pose_estimation" type="checkerboard_detector_node" output="screen">
 
-        <remap from="image" to="/narrow_stereo_camera/left/image_rect" />
+        <remap from="image" to="$(arg image)" />
 
-        <param name="cols" value="6" />
-        <param name="rows" value="4" />
-        <param name="size" value="0.04" />
+        <param name="cols" value="9" />
+        <param name="rows" value="6" />
+        <param name="size" value="0.0399" />
         <param name="show_detection" value="true" />
     </node>
 
