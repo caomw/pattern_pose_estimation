@@ -87,8 +87,8 @@ public:
     marker_center_[0] *= ROS_TO_AR;
     marker_center_[1] *= ROS_TO_AR;
 
-    nh_private_.param ("calibrated", calibrated_, false);
-    ROS_INFO_STREAM ("\tCalibrated? " << (calibrated_ ? "true" : "false"));
+    nh_private_.param ("rectified", rectified_, false);
+    ROS_INFO_STREAM ("\trectified? " << (rectified_ ? "true" : "false"));
 
     nh_private_.param ("lazy", lazy_, false);
     ROS_INFO_STREAM ("\tLazy? " << (lazy_ ? "true" : "false"));
@@ -261,7 +261,7 @@ private:
     cam_param.mat[1][3] = camera_info_msg->P[7];
     cam_param.mat[2][3] = camera_info_msg->P[11];
     
-    if (calibrated_)
+    if (rectified_)
     {
       // no distortion
       cam_param.dist_factor[0] = camera_info_msg->width / 2;
@@ -304,7 +304,7 @@ private:
 
   bool cache_camera_info_;
   bool previous_marker_detected_;
-  bool calibrated_;
+  bool rectified_;
   bool lazy_;
 
 };
