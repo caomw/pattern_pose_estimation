@@ -27,12 +27,11 @@ private:
   tf::TransformBroadcaster tf_broadcaster_;
     
   std::vector<cv::Point3f> points3d_; // known 3D points
-  bool calibrated_; // is input image calibrated ?
-  // pattern params
-  int cols_, rows_;
-  double square_size_;
 
-  bool show_detection_; // draw detection on screen?
+  bool rectified_;      // should be true if input image is rectified
+  int cols_, rows_;     // number of internal internal corners
+  double square_size_;  // square size
+  bool show_detection_; // draw detection on screen
   
 public:
 
@@ -47,10 +46,10 @@ public:
     nh_priv_.param("cols", cols_, 8);
     nh_priv_.param("rows", rows_, 6);
     nh_priv_.param("size", square_size_, 0.06);
-    nh_priv_.param("calibrated", calibrated_, true);
+    nh_priv_.param("rectified", rectified_, true);
     nh_priv_.param("show_detection", show_detection_, false);
-    ROS_INFO_STREAM("Calibrated is set to " << calibrated_);
-    ROS_INFO_STREAM("Calibration pattern parameters: " << rows_ << "x" << cols_ << ", size is " << square_size_);
+    ROS_INFO_STREAM("Image is already rectified : " << rectified_);
+    ROS_INFO_STREAM("Checkerboard parameters: " << rows_ << "x" << cols_ << ", size is " << square_size_);
     for (int i=0; i<rows_; i++)
       for(int j=0; j<cols_; j++)
         points3d_.push_back(cv::Point3f(j*square_size_,i*square_size_,0.0));
@@ -65,10 +64,10 @@ public:
   void report(const cv::Mat& t_vec, const cv::Mat& r_vec, const cv::Mat& r_mat)
   {
     std::cout << "Current checkerboard pose is:\n";
-    std::cout << "Rv = [ " << r_vec.at<double>(0,0) << " " << r_vec.at<double>(1,0) << " " << r_vec.at<double>(2,0) << " ]\n";
     std::cout << "R  = [ " << r_mat.at<double>(0,0) << " " << r_mat.at<double>(0,1) << " " << r_mat.at<double>(0,2) << " ]\n"; 
     std::cout << "     [ " << r_mat.at<double>(1,0) << " " << r_mat.at<double>(1,1) << " " << r_mat.at<double>(1,2) << " ]\n";
     std::cout << "     [ " << r_mat.at<double>(2,0) << " " << r_mat.at<double>(2,1) << " " << r_mat.at<double>(2,2) << " ]\n"; 
+    std::cout << "Rv = [ " << r_vec.at<double>(0,0) << " " << r_vec.at<double>(1,0) << " " << r_vec.at<double>(2,0) << " ]\n";
     std::cout << "T  = [ " << t_vec.at<double>(0,0) << " " << t_vec.at<double>(1,0) << " " << t_vec.at<double>(2,0) << " ]\n";
   }
   
@@ -95,17 +94,8 @@ public:
   void detect(const sensor_msgs::ImageConstPtr& image, 
           const sensor_msgs::CameraInfoConstPtr& cam_info)
   { 
-    cv_bridge::CvImageConstPtr cv_image = cv_bridge::toCvShare(image, "mono8");
-    /*
-    namespace enc = sensor_msgs::image_encodings;
-    const std::string& encoding = image->encoding;
-    int image_type = CV_8UC1;
-    if (encoding == enc::BGR8 || encoding == enc::RGB8)
-      image_type = CV_8UC3;
-      */
+    cv_bridge::CvImageConstPtr cv_image = cv_bridge::toCvShare(image, sensor_msgs::image_encodings::MONO8);
     const cv::Mat& mat = cv_image->image;
-    //const cv::Mat mat(image->height, image->width, image_type,
-    //                  const_cast<uint8_t*>(&image->data[0]), image->step);
     std::vector<cv::Point2f> corners;
     bool success = cv::findChessboardCorners(mat, cv::Size(cols_, rows_), corners);
     if (!success)
@@ -119,13 +109,13 @@ public:
       return;
     }
     cv::cornerSubPix(mat, corners, cv::Size(5,5), cv::Size(-1,-1), 
-        cv::TermCriteria(CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
+                     cv::TermCriteria(CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
     cv::Mat t_vec(3,1,CV_64FC1);
     cv::Mat r_vec(3,1,CV_64FC1);
     cv::Mat r_mat(3,3,CV_64FC1);
     cv::Mat points_mat(points3d_);
     cv::Mat corners_mat(corners);
-    if (calibrated_)
+    if (rectified_)
     {
         const cv::Mat P(3,4, CV_64FC1, const_cast<double*>(cam_info->P.data()));
         // We have to take K' here extracted from P to take the R|t into account
