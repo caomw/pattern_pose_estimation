@@ -22,26 +22,20 @@
 
 #include <AR/param.h>
 #include <AR/ar.h>
-#include <AR/video.h>
 
 #include <ros/ros.h>
 #include <ros/package.h>
-#include <ros/console.h>
+
 #include <geometry_msgs/TransformStamped.h>
-#include <sensor_msgs/CameraInfo.h>
-#include <visualization_msgs/Marker.h>
 #include <tf/transform_broadcaster.h>
 #include <image_transport/image_transport.h>
-#include <resource_retriever/retriever.h>
 
-#include <cv_bridge/CvBridge.h>
+#include <cv_bridge/cv_bridge.h>
 
 #include <ar_pose/ARMarker.h> // marker msg
 
-const std::string cameraImageTopic_ = "image";
-const std::string cameraInfoTopic_  = "camera_info";
-
-const double AR_TO_ROS = 0.001;
+static const double AR_TO_ROS = 0.001;
+static const double ROS_TO_AR = 1000.0;
 
 namespace ar_pose
 {
@@ -50,86 +44,76 @@ class ARSinglePublisher
 {
 
 public:
-  ARSinglePublisher (ros::NodeHandle & n):n_ (n), it_ (n_)
+  ARSinglePublisher() : nh_(), nh_private_("~"), it_(nh_), previous_marker_detected_(false)
   {
-    std::string local_path;
-    std::string package_path = ros::package::getPath (ROS_PACKAGE_NAME);
-	std::string default_path = "data/patt.hiro";
-    ros::NodeHandle n_param ("~");
-    XmlRpc::XmlRpcValue xml_marker_center;
-
-    ROS_INFO("Starting ArSinglePublisher");
-
     // **** get parameters
-
-    if (!n_param.getParam("publish_tf", publishTf_))
-      publishTf_ = true;
+    nh_private_.param("publish_tf", publishTf_, true);
     ROS_INFO ("\tPublish transforms: %d", publishTf_);
 
-    if (!n_param.getParam("publish_visual_markers", publishVisualMarkers_))
-      publishVisualMarkers_ = true;
-    ROS_INFO ("\tPublish visual markers: %d", publishVisualMarkers_);
-
-    if (!n_param.getParam("threshold", threshold_))
-      threshold_ = 100;
+    nh_private_.param("threshold", threshold_, 100);
     ROS_INFO ("\tThreshold: %d", threshold_);
 
-    if (!n_param.getParam("marker_width", markerWidth_))
-      markerWidth_ = 80.0;
-    else
-      markerWidth_ *= 1000; // param is given in meters
-    ROS_INFO ("\tMarker Width: %.1f", markerWidth_);
+    nh_private_.param("marker_width", markerWidth_, 0.08);
+    ROS_INFO ("\tMarker Width [m]: %.1f", markerWidth_);
+    markerWidth_ *= ROS_TO_AR;
 
-    if (!n_param.getParam("reverse_transform", reverse_transform_))
-      reverse_transform_ = false;
+    nh_private_.param("reverse_transform", reverse_transform_, false);
     ROS_INFO("\tReverse Transform: %d", reverse_transform_);
 
-    if (!n_param.getParam("marker_frame", markerFrame_))
-      markerFrame_ = "ar_marker";
+    nh_private_.param("marker_frame", markerFrame_, std::string("ar_marker"));
     ROS_INFO ("\tMarker frame: %s", markerFrame_.c_str());
 
     // If mode=0, we use arGetTransMat instead of arGetTransMatCont
     // The arGetTransMatCont function uses information from the previous image
     // frame to reduce the jittering of the marker
-    if (!n_param.getParam("use_history", useHistory_))
-      useHistory_ = true;
+    nh_private_.param("use_history", useHistory_, true);
     ROS_INFO("\tUse history: %d", useHistory_);
 
-//     n_param.param ("marker_pattern", local_path, std::string ("data/patt.hiro"));
-//     sprintf (pattern_filename_, "%s/%s", package_path.c_str (), local_path.c_str ());
-//     ROS_INFO ("\tMarker Pattern Filename: %s", pattern_filename_);
+    std::string pattern_filename;
+	nh_private_.param("marker_pattern", pattern_filename, 
+	    ros::package::getPath("ar_pose") + "/data/patt.hiro");
+    // load pattern file
+    ROS_INFO_STREAM("Loading pattern " << pattern_filename);
+    patt_id_ = arLoadPatt(pattern_filename.c_str());
+    if (patt_id_ < 0)
+    {
+      ROS_ERROR_STREAM("Pattern " << pattern_filename << " could not be loaded.");
+      ROS_BREAK();
+    }
 
-	//modifications to allow patterns to be loaded from outside the package
-	n_param.param ("marker_pattern", local_path, default_path);
-	if (local_path.compare(0,5,"data/") == 0){
-	  //to keep working on previous implementations, check if first 5 chars equal "data/"
-	  sprintf (pattern_filename_, "%s/%s", package_path.c_str (), local_path.c_str ());
-	}
-	else{
-	  //for new implementations, can pass a path outside the package_path
-	  sprintf (pattern_filename_, "%s", local_path.c_str ());
-	}
+    nh_private_.param ("marker_center_x", marker_center_[0], 0.0);
+    nh_private_.param ("marker_center_y", marker_center_[1], 0.0);
+    ROS_INFO ("\tMarker Center [m]: (%.1f,%.1f)", marker_center_[0], marker_center_[1]);
+    marker_center_[0] *= ROS_TO_AR;
+    marker_center_[1] *= ROS_TO_AR;
 
-    n_param.param ("marker_center_x", marker_center_[0], 0.0);
-    n_param.param ("marker_center_y", marker_center_[1], 0.0);
-    ROS_INFO ("\tMarker Center: (%.1f,%.1f)", marker_center_[0], marker_center_[1]);
-
-    n_param.param ("calibrated", calibrated_, false);
+    nh_private_.param ("calibrated", calibrated_, false);
     ROS_INFO_STREAM ("\tCalibrated? " << (calibrated_ ? "true" : "false"));
 
-    // **** subscribe
+    nh_private_.param ("lazy", lazy_, false);
+    ROS_INFO_STREAM ("\tLazy? " << (lazy_ ? "true" : "false"));
 
-    ROS_INFO ("Subscribing to info topic");
-    sub_ = n_.subscribe (cameraInfoTopic_, 0, &ARSinglePublisher::camInfoCallback, this);
-    haveCamInfo_ = false;
-    
+    nh_private_.param ("cache_camera_info", cache_camera_info_, true);
+    ROS_INFO_STREAM ("\tCache camera info? " << (cache_camera_info_ ? "true" : "false"));
+
+    // lazy subscription
+    ros::SubscriberStatusCallback connect_cb;
+    if (lazy_)
+    {
+      connect_cb = boost::bind(&ARSinglePublisher::connectCb, this);
+    }
+    else
+    {
+      ROS_INFO("Subscribing to camera");
+      camera_sub_ = it_.subscribeCamera("image", 0, &ARSinglePublisher::imageCallback, this);
+    }
+    // **** advertise 
+    arMarkerPub_ = nh_.advertise<ar_pose::ARMarker>("ar_pose_marker", 1, connect_cb, connect_cb);
   }
 
-  ~ARSinglePublisher()
-  {
-    //cvReleaseImage(&capture); //Don't know why but crash when release the image
-    arVideoCapStop ();
-    arVideoClose ();
+  ~ARSinglePublisher() 
+  { 
+    arFreePatt(patt_id_);
   }
 
 
@@ -137,295 +121,201 @@ private:
 
   void connectCb()
   {
-    if (haveCamInfo_)
+    ROS_DEBUG("Connection callback");
+    bool has_subscribers = arMarkerPub_.getNumSubscribers() > 0;
+    if (has_subscribers)
     {
-      bool has_subscribers = arMarkerPub_.getNumSubscribers() > 0 || rvizMarkerPub_.getNumSubscribers() > 0;
-      if (has_subscribers)
-      {
-        ROS_INFO("Subscribing to camera.");
-        cam_sub_ = it_.subscribe (cameraImageTopic_, 0, &ARSinglePublisher::getTransformationCallback, this);
-      }
-      else 
-      {
-        ROS_INFO("Unsubscribing from camera.");
-        cam_sub_.shutdown();
-      }
+      ROS_INFO("Subscribing to camera.");
+      camera_sub_ = it_.subscribeCamera("image", 0, &ARSinglePublisher::imageCallback, this);
+    }
+    else 
+    {
+      ROS_INFO("Unsubscribing from camera.");
+      camera_sub_.shutdown();
     }
   }
 
-  void arInit ()
-  {   
-    arInitCparam (&cam_param_);
-
-    ROS_INFO ("*** Camera Parameter ***");
-    arParamDisp (&cam_param_);
-
-    // load pattern file
-    ROS_INFO_STREAM("Loading pattern " << pattern_filename_);
-    patt_id_ = arLoadPatt (pattern_filename_);
-    if (patt_id_ < 0)
-    {
-      ROS_ERROR ("Pattern file load error: %s", pattern_filename_);
-      ROS_BREAK ();
-    }
-
-    sz_ = cvSize (cam_param_.xsize, cam_param_.ysize);
-    capture_ = cvCreateImage (sz_, IPL_DEPTH_8U, 4);
-  }
-
-  void getTransformationCallback (const sensor_msgs::ImageConstPtr & image_msg)
+  void imageCallback(const sensor_msgs::ImageConstPtr& image_msg,
+                     const sensor_msgs::CameraInfoConstPtr& camera_info_msg)
   {
-    ARUint8 *dataPtr;
-    ARMarkerInfo *marker_info;
-    int marker_num;
-    int i, k;
+    // initialize ar camera parameters if needed
+    static bool cparam_initialized = false;
+    if (!cparam_initialized || !cache_camera_info_)
+    {
+      initAR(camera_info_msg);
+      cparam_initialized = true;
+    }
 
-    /* Get the image from ROSTOPIC
-     * NOTE: the dataPtr format is BGR because the ARToolKit library was
-     * build with V4L, dataPtr format change according to the 
-     * ARToolKit configure option (see config.h).*/
+    // convert ROS image to OpenCV
     try
     {
-      capture_ = bridge_.imgMsgToCv (image_msg, "bgr8");
-    }
-    catch (sensor_msgs::CvBridgeException & e)
-    {
-      ROS_ERROR ("Could not convert from '%s' to 'bgr8'.", image_msg->encoding.c_str ());
-    }
-    //cvConvertImage(capture_,capture_,CV_CVTIMG_FLIP); //flip image
-    dataPtr = (ARUint8 *) capture_->imageData;
+      cv_bridge::CvImageConstPtr cv_ptr = cv_bridge::toCvShare(image_msg, "bgr8");
 
-    // detect the markers in the video frame 
-    if (arDetectMarker (dataPtr, threshold_, &marker_info, &marker_num) < 0)
-    {
-      ROS_FATAL ("arDetectMarker failed");
-      ROS_BREAK ();             // FIXME: I don't think this should be fatal... -Bill
-    }
+      /* 
+      * NOTE: the dataPtr format is BGR because the ARToolKit library was
+      * build with V4L, dataPtr format change according to the 
+      * ARToolKit configure option (see config.h).*/
+      ARUint8* dataPtr = (ARUint8 *)cv_ptr->image.data;
 
-    // check for known patterns
-    k = -1;
-    for (i = 0; i < marker_num; i++)
-    {
-      if (marker_info[i].id == patt_id_)
+      // detect the markers in the video frame 
+      ARMarkerInfo *marker_info;
+      int num_markers;
+      if (arDetectMarker(dataPtr, threshold_, &marker_info, &num_markers) < 0)
       {
-        ROS_DEBUG ("Found pattern: %d ", patt_id_);
-
-        // make sure you have the best pattern (highest confidence factor)
-        if (k == -1)
-          k = i;
-        else if (marker_info[k].cf < marker_info[i].cf)
-          k = i;
+        ROS_ERROR("arDetectMarker failed");
+        return;
       }
-    }
-
-    if (k != -1)
-    {
-      // **** get the transformation between the marker and the real camera
-      double arQuat[4], arPos[3];
-
-      if (!useHistory_ || contF == 0)
-        arGetTransMat (&marker_info[k], marker_center_, markerWidth_, marker_trans_);
-      else
-        arGetTransMatCont (&marker_info[k], marker_trans_, marker_center_, markerWidth_, marker_trans_);
-
-      contF = 1;
-
-      //arUtilMatInv (marker_trans_, cam_trans);
-      arUtilMat2QuatPos (marker_trans_, arQuat, arPos);
-
-      // **** convert to ROS frame
-
-      double quat[4], pos[3];
-    
-      pos[0] = arPos[0] * AR_TO_ROS;
-      pos[1] = arPos[1] * AR_TO_ROS;
-      pos[2] = arPos[2] * AR_TO_ROS;
-
-      quat[0] = -arQuat[0];
-      quat[1] = -arQuat[1];
-      quat[2] = -arQuat[2];
-      quat[3] = arQuat[3];
-
-      ROS_DEBUG (" QUAT: Pos x: %3.5f  y: %3.5f  z: %3.5f", pos[0], pos[1], pos[2]);
-      ROS_DEBUG ("     Quat qx: %3.5f qy: %3.5f qz: %3.5f qw: %3.5f", quat[0], quat[1], quat[2], quat[3]);
-
-      // **** publish the marker
-
-		  ar_pose_marker_.header.frame_id = image_msg->header.frame_id;
-		  ar_pose_marker_.header.stamp    = image_msg->header.stamp;
-		  ar_pose_marker_.id              = marker_info->id;
-
-		  ar_pose_marker_.pose.pose.position.x = pos[0];
-		  ar_pose_marker_.pose.pose.position.y = pos[1];
-		  ar_pose_marker_.pose.pose.position.z = pos[2];
-
-		  ar_pose_marker_.pose.pose.orientation.x = quat[0];
-		  ar_pose_marker_.pose.pose.orientation.y = quat[1];
-		  ar_pose_marker_.pose.pose.orientation.z = quat[2];
-		  ar_pose_marker_.pose.pose.orientation.w = quat[3];
-		
-		  ar_pose_marker_.confidence = marker_info->cf;
-
-		  arMarkerPub_.publish(ar_pose_marker_);
-		  ROS_DEBUG ("Published ar_single marker");
-		
-      // **** publish transform between camera and marker
-
-      btQuaternion rotation (quat[0], quat[1], quat[2], quat[3]);
-      btVector3 origin(pos[0], pos[1], pos[2]);
-      btTransform t(rotation, origin);
-
-      if(publishTf_)
+      ROS_DEBUG("Detected %i markers.", num_markers);
+      // check for known patterns
+      bool pattern_found = false;
+      int best_marker_index = -1;
+      for(int i = 0; i < num_markers; i++)
       {
-        if(reverse_transform_)
+        if (marker_info[i].id == patt_id_)
         {
-          tf::StampedTransform markerToCam (t.inverse(), image_msg->header.stamp, markerFrame_.c_str(), image_msg->header.frame_id);
-          broadcaster_.sendTransform(markerToCam);
-        } else {
-          tf::StampedTransform camToMarker (t, image_msg->header.stamp, image_msg->header.frame_id, markerFrame_.c_str());
-          broadcaster_.sendTransform(camToMarker);
+          pattern_found = true;
+          ROS_DEBUG ("Found pattern: %i with confidence %f", 
+              patt_id_, marker_info[i].cf);
+          if (best_marker_index < 0)
+          {
+            best_marker_index = i;
+          }
+          else
+          {
+            // make sure you have the best pattern (highest confidence factor)
+            if (marker_info[i].cf > marker_info[best_marker_index].cf)
+            {
+              best_marker_index = i;
+            }
+          }
         }
       }
-
-      // **** publish visual marker
-
-      if(publishVisualMarkers_)
+      if (pattern_found)
       {
-        btVector3 markerOrigin(0, 0, 0.25 * markerWidth_ * AR_TO_ROS);
-        btTransform m(btQuaternion::getIdentity(), markerOrigin);
-        btTransform markerPose = t * m; // marker pose in the camera frame
-      
-        tf::poseTFToMsg(markerPose, rvizMarker_.pose);
+        // **** get the transformation between the marker and the real camera
+        if (!useHistory_ || !previous_marker_detected_)
+          arGetTransMat (&marker_info[best_marker_index], marker_center_, markerWidth_, marker_trans_);
+        else
+          arGetTransMatCont (&marker_info[best_marker_index], marker_trans_, marker_center_, markerWidth_, marker_trans_);
 
-			  rvizMarker_.header.frame_id = image_msg->header.frame_id;
-			  rvizMarker_.header.stamp = image_msg->header.stamp;
-			  rvizMarker_.id = 1;
+        previous_marker_detected_ = true;
+        double arQuat[4], arPos[3];
+        arUtilMat2QuatPos (marker_trans_, arQuat, arPos);
+        tf::Vector3 translation(arPos[0] * AR_TO_ROS, 
+                                arPos[1] * AR_TO_ROS, 
+                                arPos[2] * AR_TO_ROS);
 
-			  rvizMarker_.scale.x = 1.0 * markerWidth_ * AR_TO_ROS;
-			  rvizMarker_.scale.y = 1.0 * markerWidth_ * AR_TO_ROS;
-			  rvizMarker_.scale.z = 0.5 * markerWidth_ * AR_TO_ROS;
-			  rvizMarker_.ns = "basic_shapes";
-			  rvizMarker_.type = visualization_msgs::Marker::CUBE;
-			  rvizMarker_.action = visualization_msgs::Marker::ADD;
-			  rvizMarker_.color.r = 0.0f;
-			  rvizMarker_.color.g = 1.0f;
-			  rvizMarker_.color.b = 0.0f;
-			  rvizMarker_.color.a = 1.0;
-			  rvizMarker_.lifetime = ros::Duration();
-			
-			  rvizMarkerPub_.publish(rvizMarker_);
-			  ROS_DEBUG ("Published visual marker");
+        tf::Quaternion rotation(-arQuat[0], -arQuat[1], -arQuat[2], arQuat[3]);
+        tf::Transform transform(rotation, translation);
+        // **** publish the marker msg
+        ar_pose::ARMarker marker_msg;
+        marker_msg.header.frame_id = image_msg->header.frame_id;
+        marker_msg.header.stamp    = image_msg->header.stamp;
+        marker_msg.id              = marker_info[best_marker_index].id;
+        tf::poseTFToMsg(transform, marker_msg.pose.pose);
+
+        marker_msg.confidence = marker_info[best_marker_index].cf;
+        arMarkerPub_.publish(marker_msg);
+        
+        if (publishTf_)
+        {
+          // **** publish transform between camera and marker
+          if (reverse_transform_)
+          {
+            tf::StampedTransform markerToCam (transform.inverse(), image_msg->header.stamp, markerFrame_.c_str(), image_msg->header.frame_id);
+            broadcaster_.sendTransform(markerToCam);
+          } else {
+            tf::StampedTransform camToMarker (transform, image_msg->header.stamp, image_msg->header.frame_id, markerFrame_.c_str());
+            broadcaster_.sendTransform(camToMarker);
+          }
+        }
       }
+      else
+      {
+        previous_marker_detected_ = false;
+        ROS_DEBUG("Failed to locate marker pattern.");
+      }
+    }
+    catch (cv_bridge::Exception& e)
+    {
+      ROS_ERROR("cv_bridge exception: %s", e.what());
+    }
+  }
+
+  void initAR(const sensor_msgs::CameraInfoConstPtr& camera_info_msg)
+  {
+    ARParam cam_param;
+    cam_param.xsize = camera_info_msg->width;
+    cam_param.ysize = camera_info_msg->height;
+    
+    cam_param.mat[0][0] = camera_info_msg->P[0];
+    cam_param.mat[1][0] = camera_info_msg->P[4];
+    cam_param.mat[2][0] = camera_info_msg->P[8];
+    cam_param.mat[0][1] = camera_info_msg->P[1];
+    cam_param.mat[1][1] = camera_info_msg->P[5];
+    cam_param.mat[2][1] = camera_info_msg->P[9];
+    cam_param.mat[0][2] = camera_info_msg->P[2];
+    cam_param.mat[1][2] = camera_info_msg->P[6];
+    cam_param.mat[2][2] = camera_info_msg->P[10];
+    cam_param.mat[0][3] = camera_info_msg->P[3];
+    cam_param.mat[1][3] = camera_info_msg->P[7];
+    cam_param.mat[2][3] = camera_info_msg->P[11];
+    
+    if (calibrated_)
+    {
+      // no distortion
+      cam_param.dist_factor[0] = camera_info_msg->width / 2;
+      cam_param.dist_factor[1] = camera_info_msg->height / 2;
+      cam_param.dist_factor[2] = 0.0;
+      cam_param.dist_factor[3] = 1.0;
     }
     else
     {
-      contF = 0;
-      ROS_DEBUG ("Failed to locate marker");
+      // take optical center and ony first distortion value 
+      // (ARToolKit does not support more sophisticated distortion models)
+      cam_param.dist_factor[0] = camera_info_msg->K[2];       // x0 = cX from openCV calibration
+      cam_param.dist_factor[1] = camera_info_msg->K[5];       // y0 = cY from openCV calibration
+      cam_param.dist_factor[2] = -100*camera_info_msg->D[0];  // f = -100*k1 from CV. Note, we had to do mm^2 to m^2, hence 10^8->10^2
+      cam_param.dist_factor[3] = 1.0;                  // scale factor, should probably be >1, but who cares...
     }
+    ROS_DEBUG("Initializing AR camera parameters");
+    arInitCparam(&cam_param);
   }
 
-  void camInfoCallback (const sensor_msgs::CameraInfoConstPtr & cam_info)
-  {
-    if (!haveCamInfo_)
-    {
-      cam_info_ = (*cam_info);
-
-      cam_param_.xsize = cam_info_.width;
-      cam_param_.ysize = cam_info_.height;
-      
-      cam_param_.mat[0][0] = cam_info_.P[0];
-      cam_param_.mat[1][0] = cam_info_.P[4];
-      cam_param_.mat[2][0] = cam_info_.P[8];
-      cam_param_.mat[0][1] = cam_info_.P[1];
-      cam_param_.mat[1][1] = cam_info_.P[5];
-      cam_param_.mat[2][1] = cam_info_.P[9];
-      cam_param_.mat[0][2] = cam_info_.P[2];
-      cam_param_.mat[1][2] = cam_info_.P[6];
-      cam_param_.mat[2][2] = cam_info_.P[10];
-      cam_param_.mat[0][3] = cam_info_.P[3];
-      cam_param_.mat[1][3] = cam_info_.P[7];
-      cam_param_.mat[2][3] = cam_info_.P[11];
-     
-      if (calibrated_)
-      {
-        // no distortion
-        cam_param_.dist_factor[0] = cam_info_.width / 2;
-        cam_param_.dist_factor[1] = cam_info_.height / 2;
-        cam_param_.dist_factor[2] = 0.0;
-        cam_param_.dist_factor[3] = 1.0;
-      }
-      else
-      {
-        cam_param_.dist_factor[0] = cam_info_.K[2];       // x0 = cX from openCV calibration
-        cam_param_.dist_factor[1] = cam_info_.K[5];       // y0 = cY from openCV calibration
-        cam_param_.dist_factor[2] = -100*cam_info_.D[0];  // f = -100*k1 from CV. Note, we had to do mm^2 to m^2, hence 10^8->10^2
-        cam_param_.dist_factor[3] = 1.0;                  // scale factor, should probably be >1, but who cares...
-      }
-	     
-      arInit();
-
-      haveCamInfo_ = true;
-      // **** advertsie 
-      ros::SubscriberStatusCallback connect_cb = boost::bind(&ARSinglePublisher::connectCb, this);
-
-      arMarkerPub_   = n_.advertise<ar_pose::ARMarker>("ar_pose_marker", 1, connect_cb, connect_cb);
-      if (publishVisualMarkers_){ 
-          rvizMarkerPub_ = n_.advertise<visualization_msgs::Marker>("visualization_marker", 1, connect_cb, connect_cb);
-      }
-    }
-  }
-
-  ros::NodeHandle n_;
-  ros::Subscriber sub_;
+  ros::NodeHandle nh_, nh_private_;
   tf::TransformBroadcaster broadcaster_;
   ros::Publisher arMarkerPub_;
 
-  ar_pose::ARMarker ar_pose_marker_;
   image_transport::ImageTransport it_;
-  image_transport::Subscriber cam_sub_;
-  sensor_msgs::CvBridge bridge_;
-  sensor_msgs::CameraInfo cam_info_;
+  image_transport::CameraSubscriber camera_sub_;
 
   // **** parameters
-
-  //std::string cameraFrame_;
   std::string markerFrame_;
   bool publishTf_;
-  bool publishVisualMarkers_;
   bool useHistory_;
   int threshold_;
   double markerWidth_;        // Size of the AR Marker in mm
 
-  ARParam cam_param_;         // Camera Calibration Parameters
   int patt_id_;               // AR Marker Pattern
-  char pattern_filename_[FILENAME_MAX];
   bool reverse_transform_;    // Reverse direction of transform marker -> cam
 
+  double marker_trans_[3][4]; // Marker Transform cache
   double marker_center_[2];   // Physical Center of the Marker
-  double marker_trans_[3][4]; // Marker Transform
 
-  // **** for visualisation in rviz
-  ros::Publisher rvizMarkerPub_;
-  visualization_msgs::Marker rvizMarker_;
-  
-  int contF;
-  bool haveCamInfo_;
-  CvSize sz_;
-  IplImage *capture_;
-
+  bool cache_camera_info_;
+  bool previous_marker_detected_;
   bool calibrated_;
+  bool lazy_;
 
-};                            // end class ARSinglePublisher
+};
 
-}                               // end namespace ar_pose
-
+} // end namespace ar_pose
 
 
 int main (int argc, char **argv)
 {
   ros::init (argc, argv, "marker_detector");
-  ros::NodeHandle n;
-  ar_pose::ARSinglePublisher arSingle(n);
+  ar_pose::ARSinglePublisher arSingle;
   ros::spin();
   return 0;
 }
