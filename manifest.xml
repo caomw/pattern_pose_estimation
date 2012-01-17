@@ -13,7 +13,10 @@
   <depend package="opencv2"/>
   <depend package="sensor_msgs"/>
   <depend package="tf"/>
+  <depend package="cv_bridge"/>
   
+  <depend package="ar_pose"/>
+  <depend package="artoolkit"/>
 
 </package>
 
