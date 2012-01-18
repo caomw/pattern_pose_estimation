@@ -11,6 +11,8 @@ cfg/cpp/
 cfg/*.cfgc
 msg_gen/
 msg/lisp/
+srv_gen/
+_*.py
 
 # CMake files
 CMakeCache.txt
