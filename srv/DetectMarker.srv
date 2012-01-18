@@ -1,0 +1,5 @@
+sensor_msgs/Image image
+sensor_msgs/CameraInfo camera_info
+bool rectified
+---
+ar_pose/ARMarkers markers
