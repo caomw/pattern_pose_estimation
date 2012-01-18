@@ -260,24 +260,21 @@ private:
     cam_param.mat[0][3] = camera_info_msg->P[3];
     cam_param.mat[1][3] = camera_info_msg->P[7];
     cam_param.mat[2][3] = camera_info_msg->P[11];
+    cam_param.dist_factor[0] = camera_info_msg->K[2];       // x0 = cX from openCV calibration
+    cam_param.dist_factor[1] = camera_info_msg->K[5];       // y0 = cY from openCV calibration
+    cam_param.dist_factor[3] = 1.0;
     
     if (rectified_)
     {
       // no distortion
-      cam_param.dist_factor[0] = camera_info_msg->width / 2;
-      cam_param.dist_factor[1] = camera_info_msg->height / 2;
       cam_param.dist_factor[2] = 0.0;
-      cam_param.dist_factor[3] = 1.0;
     }
     else
     {
-      // take optical center and ony first distortion value 
       // (ARToolKit does not support more sophisticated distortion models)
-      cam_param.dist_factor[0] = camera_info_msg->K[2];       // x0 = cX from openCV calibration
-      cam_param.dist_factor[1] = camera_info_msg->K[5];       // y0 = cY from openCV calibration
       cam_param.dist_factor[2] = -100*camera_info_msg->D[0];  // f = -100*k1 from CV. Note, we had to do mm^2 to m^2, hence 10^8->10^2
-      cam_param.dist_factor[3] = 1.0;                  // scale factor, should probably be >1, but who cares...
     }
+
     ROS_DEBUG("Initializing AR camera parameters");
     arInitCparam(&cam_param);
   }
