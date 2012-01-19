@@ -4,10 +4,11 @@ pattern_pose_estimation::MarkerDetectorServer::MarkerDetectorServer(
   ros::NodeHandle& nh, ros::NodeHandle& nh_private) :
   nh_(nh), nh_private_(nh_private)
 {
-  detector_.loadSettings(nh_private);
+  detector_.loadSettings(nh_private_);
 
-  nh_.advertiseService("detect_marker", 
+  service_server_ = nh_private_.advertiseService("detect_marker", 
       &MarkerDetectorServer::serviceCallback, this);
+  ROS_INFO("Service \"detect_marker\" advertised.");
 }
 
 bool pattern_pose_estimation::MarkerDetectorServer::serviceCallback(

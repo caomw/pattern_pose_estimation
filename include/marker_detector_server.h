@@ -19,6 +19,7 @@ private:
   bool serviceCallback(DetectMarkerRequest& req, DetectMarkerResponse& res);
 
   ros::NodeHandle nh_, nh_private_;
+  ros::ServiceServer service_server_;
   MarkerDetector detector_;
 };
 
