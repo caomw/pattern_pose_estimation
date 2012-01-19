@@ -120,6 +120,7 @@ void pattern_pose_estimation::MarkerDetector::loadMarker(
       throw MarkerDetectorException("Multiple markers have same ID");
     }
   }
+  marker.detection_flag = NOT_DETECTED;
   markers_.push_back(marker);
 }
 
@@ -228,7 +229,7 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
         ROS_DEBUG("Found pattern: %i with confidence %f", 
           markers_[m].pattern_id, detected_markers[i].cf);
       
-        if (use_cache)
+        if (use_cache && markers_[m].detection_flag == LAST_DETECTED)
         {
           arGetTransMatCont(&detected_markers[i], 
               markers_[m].transformation,
@@ -243,6 +244,7 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
               markers_[m].width, 
               markers_[m].transformation);
         }
+        markers_[m].detection_flag = DETECTED;
         ar_pose::ARMarker marker_msg;
         marker_msg.header.frame_id = image.header.frame_id;
         marker_msg.header.stamp = image.header.stamp;
@@ -252,6 +254,17 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
             markers_[m].transformation, marker_msg.pose.pose);
         markers_msg.markers.push_back(marker_msg);
       }
+    }
+  }
+  for (size_t m = 0; m < markers_.size(); ++m)
+  {
+    if (markers_[m].detection_flag == DETECTED)
+    {
+      markers_[m].detection_flag = LAST_DETECTED;
+    }
+    else
+    {
+      markers_[m].detection_flag = NOT_DETECTED;
     }
   }
 }
