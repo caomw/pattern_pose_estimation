@@ -21,7 +21,9 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 #uncomment if you have defined services
 rosbuild_gensrv()
 
-rosbuild_add_library(marker_detection src/marker_detector.cpp)
+rosbuild_add_library(marker_detection src/marker_detector.cpp 
+                                      src/marker_detector_node.cpp
+                                      src/marker_detector_nodelet.cpp)
 target_link_libraries(marker_detection AR)
 
 #common commands for building c++ executables and libraries
@@ -30,7 +32,7 @@ target_link_libraries(marker_detection AR)
 #rosbuild_add_boost_directories()
 #rosbuild_link_boost(${PROJECT_NAME} thread)
 rosbuild_add_executable(checkerboard_detector_node src/checkerboard_detector_node.cpp)
-rosbuild_add_executable(marker_detector_node src/marker_detector_node.cpp)
+rosbuild_add_executable(marker_detector_node src/marker_detector_node_main.cpp)
 
 target_link_libraries(marker_detector_node marker_detection)
 
