@@ -4,10 +4,10 @@
      pose_calibration
 
   </description>
-  <author>Joan Pau Beltran</author>
+  <author>Stephan Wirth, Joan Pau Beltran</author>
   <license>BSD</license>
   <review status="unreviewed" notes=""/>
-  <url>http://ros.org/wiki/pose_calibration</url>
+  <url>http://ros.org/wiki/pattern_pose_estimation</url>
   <depend package="roscpp"/>
   <depend package="image_transport"/>
   <depend package="opencv2"/>
@@ -17,6 +17,12 @@
   
   <depend package="ar_pose"/>
   <depend package="artoolkit"/>
+
+  <depend package="nodelet"/>
+
+  <export>
+    <nodelet plugin="${prefix}/nodelet_plugins.xml"/>
+  </export>
 
 </package>
 

@@ -1,0 +1,10 @@
+<library path="lib/libmarker_detection">
+  <class name="pattern_pose_estimation/MarkerDetector"
+         type="pattern_pose_estimation::MarkerDetectorNodelet"
+         base_class_type="nodelet::Nodelet">
+    <description>
+      Nodelet for marker detection
+    </description>
+  </class>
+</library>
+
