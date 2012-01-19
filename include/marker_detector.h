@@ -74,6 +74,13 @@ private:
   void arTransformationToPose(double ar_transformation[3][4], 
       geometry_msgs::Pose& pose);
 
+  enum DetectionFlag
+  {
+    NOT_DETECTED, // marker was not detected in this and last run
+    DETECTED,     // marker is detected in current run
+    LAST_DETECTED // marker was detected in last run
+  };
+
   struct Marker
   {
     int id;
@@ -81,6 +88,7 @@ private:
     double center[2];
     int pattern_id;
     double transformation[3][4]; // cache for last transformation
+    DetectionFlag detection_flag;
   };
 
   int threshold_;
