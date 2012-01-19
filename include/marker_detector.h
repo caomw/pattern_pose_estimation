@@ -1,6 +1,8 @@
 #ifndef PATTERN_POSE_ESTIMATION_MARKER_DETECTOR
 #define PATTERN_POSE_ESTIMATION_MARKER_DETECTOR
 
+#include <ros/ros.h>
+
 #include <stdexcept>
 #include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/Image.h>
@@ -32,6 +34,11 @@ public:
   ~MarkerDetector();
 
   /**
+  * loads all settings using given node handle. will load threshold and markers
+  */
+  void loadSettings(ros::NodeHandle& nh);
+
+  /**
   * Loads a marker for the detector. Every marker that has to be detected has
   * to be loaded before using this method.
   * \param marker_id id of the marker (which will be returned on detection)
@@ -53,14 +60,16 @@ public:
     threshold_ = threshold;
   }
 
-  void setCameraInfo(const sensor_msgs::CameraInfoConstPtr& camera_info, bool rectified);
-  void detect(const sensor_msgs::ImageConstPtr& image, ar_pose::ARMarkersPtr& markers);
-  void redetect(const sensor_msgs::ImageConstPtr& image, ar_pose::ARMarkersPtr& markers);
+  void setCameraInfo(const sensor_msgs::CameraInfo& camera_info, bool rectified);
+  void detect(const sensor_msgs::Image& image, ar_pose::ARMarkers& markers);
+  void redetect(const sensor_msgs::Image& image, ar_pose::ARMarkers& markers);
 
 private:
 
-  void detectImpl(const sensor_msgs::ImageConstPtr& image, 
-      ar_pose::ARMarkersPtr& markers, bool use_cache);
+  std::string resolveURL(const std::string& url) const;
+
+  void detectImpl(const sensor_msgs::Image& image, 
+      ar_pose::ARMarkers& markers, bool use_cache);
 
   void arTransformationToPose(double ar_transformation[3][4], 
       geometry_msgs::Pose& pose);

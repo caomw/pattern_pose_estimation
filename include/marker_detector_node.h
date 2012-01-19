@@ -18,15 +18,10 @@ public:
 
 private:
 
-
   void connectCallback(const ros::SingleSubscriberPublisher&);
 
   void imageCallback(const sensor_msgs::ImageConstPtr& image_msg,
       const sensor_msgs::CameraInfoConstPtr& camera_info);
-
-  void loadMarkers();
-
-  static std::string resolveURL(const std::string& url);
 
   ros::NodeHandle nh_, nh_private_;
   tf::TransformBroadcaster broadcaster_;

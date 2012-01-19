@@ -1,12 +1,15 @@
-#include "marker_detector.h"
+#include <ros/package.h>
 
 #include <cv_bridge/cv_bridge.h>
 #include <tf/transform_datatypes.h>
-
+#include <sensor_msgs/image_encodings.h>
 #include <AR/ar.h>
+
+#include "marker_detector.h"
 
 static const double ROS_TO_AR = 1000.0;
 static const double AR_TO_ROS = 0.001;
+
 pattern_pose_estimation::MarkerDetector::MarkerDetector()
   : threshold_(DEFAULT_THRESHOLD)
 {
@@ -18,6 +21,71 @@ pattern_pose_estimation::MarkerDetector::~MarkerDetector()
   {
     arFreePatt(markers_[i].pattern_id);
   }
+}
+
+void pattern_pose_estimation::MarkerDetector::loadSettings(ros::NodeHandle& nh)
+{
+  int threshold;
+  nh.param("threshold", threshold, DEFAULT_THRESHOLD);
+  setThreshold(threshold);
+
+  XmlRpc::XmlRpcValue marker_list;
+  if (!nh.getParam("markers", marker_list))
+  {
+    throw MarkerDetectorException(
+      "No markers configured. Set the markers parameter!");
+  }
+  ROS_ASSERT(marker_list.getType() == XmlRpc::XmlRpcValue::TypeArray);
+  for (int i = 0; i < marker_list.size(); ++i)
+  {
+    ROS_ASSERT_MSG(marker_list[i].getType() == XmlRpc::XmlRpcValue::TypeArray,
+                   "Marker list corrupt, one list item is no list");
+    ROS_ASSERT_MSG(marker_list[i].size() == 5,
+                   "Marker list corrupt, marker description has not 5 values");
+    ROS_ASSERT(marker_list[i][0].getType() == XmlRpc::XmlRpcValue::TypeInt);
+    ROS_ASSERT(marker_list[i][1].getType() == XmlRpc::XmlRpcValue::TypeString);
+    ROS_ASSERT(marker_list[i][2].getType() == XmlRpc::XmlRpcValue::TypeDouble);
+    ROS_ASSERT(marker_list[i][3].getType() == XmlRpc::XmlRpcValue::TypeDouble);
+    ROS_ASSERT(marker_list[i][4].getType() == XmlRpc::XmlRpcValue::TypeDouble);
+    int marker_id           = marker_list[i][0];
+    std::string pattern_url = marker_list[i][1];
+    double marker_width     = marker_list[i][2];
+    double marker_center_x  = marker_list[i][3];
+    double marker_center_y  = marker_list[i][4];
+    std::string pattern_filename = resolveURL(pattern_url);
+    loadMarker(marker_id, pattern_filename,
+               marker_width, marker_center_x, marker_center_y);
+  }
+}
+
+std::string pattern_pose_estimation::MarkerDetector::resolveURL(const std::string& url) const
+{
+  std::string prefix = "file://";
+  if (url.substr(0, prefix.length()) == prefix)
+  {
+    return url.substr(prefix.length());
+  }
+  // Scan URL from after "package://" until next '/' and extract
+  prefix = "package://";
+  if (url.substr(0, prefix.length()) == prefix)
+  {
+    size_t rest = url.find('/', prefix.length());
+    std::string package(url.substr(prefix.length(), rest - prefix.length()));
+    // Look up the ROS package path name.
+    std::string pkg_path(ros::package::getPath(package));
+    if (pkg_path.empty())                    // package not found?
+    {
+      ROS_ERROR_STREAM("unknown package: " << pkg_path);
+      return url;
+    }
+    else
+    {
+      // Construct file name from package location and remainder of URL.
+      return pkg_path + url.substr(rest);
+    }
+  }
+  throw MarkerDetectorException("Could not resolve URL " + url);
+  return url;
 }
 
 void pattern_pose_estimation::MarkerDetector::loadMarker(
@@ -48,27 +116,27 @@ void pattern_pose_estimation::MarkerDetector::loadMarker(
 }
 
 void pattern_pose_estimation::MarkerDetector::setCameraInfo(
-    const sensor_msgs::CameraInfoConstPtr& camera_info_msg,
+    const sensor_msgs::CameraInfo& camera_info_msg,
     bool rectified)
 {
   ARParam cam_param;
-  cam_param.xsize = camera_info_msg->width;
-  cam_param.ysize = camera_info_msg->height;
+  cam_param.xsize = camera_info_msg.width;
+  cam_param.ysize = camera_info_msg.height;
   
-  cam_param.mat[0][0] = camera_info_msg->P[0];
-  cam_param.mat[1][0] = camera_info_msg->P[4];
-  cam_param.mat[2][0] = camera_info_msg->P[8];
-  cam_param.mat[0][1] = camera_info_msg->P[1];
-  cam_param.mat[1][1] = camera_info_msg->P[5];
-  cam_param.mat[2][1] = camera_info_msg->P[9];
-  cam_param.mat[0][2] = camera_info_msg->P[2];
-  cam_param.mat[1][2] = camera_info_msg->P[6];
-  cam_param.mat[2][2] = camera_info_msg->P[10];
-  cam_param.mat[0][3] = camera_info_msg->P[3];
-  cam_param.mat[1][3] = camera_info_msg->P[7];
-  cam_param.mat[2][3] = camera_info_msg->P[11];
-  cam_param.dist_factor[0] = camera_info_msg->K[2];       // x0 = cX from openCV calibration
-  cam_param.dist_factor[1] = camera_info_msg->K[5];       // y0 = cY from openCV calibration
+  cam_param.mat[0][0] = camera_info_msg.P[0];
+  cam_param.mat[1][0] = camera_info_msg.P[4];
+  cam_param.mat[2][0] = camera_info_msg.P[8];
+  cam_param.mat[0][1] = camera_info_msg.P[1];
+  cam_param.mat[1][1] = camera_info_msg.P[5];
+  cam_param.mat[2][1] = camera_info_msg.P[9];
+  cam_param.mat[0][2] = camera_info_msg.P[2];
+  cam_param.mat[1][2] = camera_info_msg.P[6];
+  cam_param.mat[2][2] = camera_info_msg.P[10];
+  cam_param.mat[0][3] = camera_info_msg.P[3];
+  cam_param.mat[1][3] = camera_info_msg.P[7];
+  cam_param.mat[2][3] = camera_info_msg.P[11];
+  cam_param.dist_factor[0] = camera_info_msg.K[2];       // x0 = cX from openCV calibration
+  cam_param.dist_factor[1] = camera_info_msg.K[5];       // y0 = cY from openCV calibration
   cam_param.dist_factor[3] = 1.0;
   
   if (rectified)
@@ -79,39 +147,46 @@ void pattern_pose_estimation::MarkerDetector::setCameraInfo(
   else
   {
     // (ARToolKit does not support more sophisticated distortion models)
-    cam_param.dist_factor[2] = -100*camera_info_msg->D[0];  // f = -100*k1 from CV. Note, we had to do mm^2 to m^2, hence 10^8->10^2
+    cam_param.dist_factor[2] = -100*camera_info_msg.D[0];  // f = -100*k1 from CV. Note, we had to do mm^2 to m^2, hence 10^8->10^2
   }
   arInitCparam(&cam_param);
 }
 
 void pattern_pose_estimation::MarkerDetector::detect(
-    const sensor_msgs::ImageConstPtr& image,
-    ar_pose::ARMarkersPtr& markers_msg)
+    const sensor_msgs::Image& image,
+    ar_pose::ARMarkers& markers_msg)
 {
   detectImpl(image, markers_msg, false);
 }
 
 void pattern_pose_estimation::MarkerDetector::redetect(
-    const sensor_msgs::ImageConstPtr& image,
-    ar_pose::ARMarkersPtr& markers_msg)
+    const sensor_msgs::Image& image,
+    ar_pose::ARMarkers& markers_msg)
 {
   detectImpl(image, markers_msg, true);
 }
 
 void pattern_pose_estimation::MarkerDetector::detectImpl(
-    const sensor_msgs::ImageConstPtr& image,
-    ar_pose::ARMarkersPtr& markers_msg, bool use_cache)
+    const sensor_msgs::Image& image,
+    ar_pose::ARMarkers& markers_msg, bool use_cache)
 {
-  markers_msg->header.stamp = image->header.stamp;
-  markers_msg->header.frame_id = image->header.frame_id;
-
-  cv_bridge::CvImageConstPtr cv_ptr = cv_bridge::toCvShare(image, "bgr8");
+  markers_msg.header.stamp = image.header.stamp;
+  markers_msg.header.frame_id = image.header.frame_id;
 
   /* 
   * NOTE: the dataPtr format is BGR because the ARToolKit library was
   * build with V4L, dataPtr format change according to the 
   * ARToolKit configure option (see config.h).*/
-  ARUint8* dataPtr = (ARUint8*)cv_ptr->image.data;
+  ARUint8* dataPtr;
+  if (image.encoding == sensor_msgs::image_encodings::BGR8)
+  {
+    dataPtr = (ARUint8*)&image.data.front();
+  }
+  else
+  {
+    cv_bridge::CvImageConstPtr cv_ptr = cv_bridge::toCvCopy(image, "bgr8");
+    dataPtr = (ARUint8*)cv_ptr->image.data;
+  }
 
   ARMarkerInfo *detected_markers;
   int num_detected_markers;
@@ -148,13 +223,13 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
               markers_[m].transformation);
         }
         ar_pose::ARMarker marker_msg;
-        marker_msg.header.frame_id = image->header.frame_id;
-        marker_msg.header.stamp = image->header.stamp;
+        marker_msg.header.frame_id = image.header.frame_id;
+        marker_msg.header.stamp = image.header.stamp;
         marker_msg.id = markers_[m].id;
         marker_msg.confidence = detected_markers[i].cf * 100;
         arTransformationToPose(
             markers_[m].transformation, marker_msg.pose.pose);
-        markers_msg->markers.push_back(marker_msg);
+        markers_msg.markers.push_back(marker_msg);
       }
     }
   }
