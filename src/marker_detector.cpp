@@ -10,9 +10,17 @@
 static const double ROS_TO_AR = 1000.0;
 static const double AR_TO_ROS = 0.001;
 
+bool pattern_pose_estimation::MarkerDetector::has_instance_ = false;
+
 pattern_pose_estimation::MarkerDetector::MarkerDetector()
-  : threshold_(DEFAULT_THRESHOLD)
+  : threshold_(DEFAULT_THRESHOLD), camera_initialized_(false)
 {
+  if (has_instance_)
+  {
+    throw MarkerDetectorException(
+        "There can only be one instance of MarkerDetector");
+  }
+  has_instance_ = true;
 }
 
 pattern_pose_estimation::MarkerDetector::~MarkerDetector()
@@ -150,6 +158,7 @@ void pattern_pose_estimation::MarkerDetector::setCameraInfo(
     cam_param.dist_factor[2] = -100*camera_info_msg.D[0];  // f = -100*k1 from CV. Note, we had to do mm^2 to m^2, hence 10^8->10^2
   }
   arInitCparam(&cam_param);
+  camera_initialized_ = true;
 }
 
 void pattern_pose_estimation::MarkerDetector::detect(
@@ -170,6 +179,16 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
     const sensor_msgs::Image& image,
     ar_pose::ARMarkers& markers_msg, bool use_cache)
 {
+  if (!camera_initialized_)
+  {
+    throw MarkerDetectorException("detect called with uninitialized camera");
+  }
+
+  if (markers_.size() == 0)
+  {
+    return;
+  }
+
   markers_msg.header.stamp = image.header.stamp;
   markers_msg.header.frame_id = image.header.frame_id;
 
@@ -178,13 +197,15 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
   * build with V4L, dataPtr format change according to the 
   * ARToolKit configure option (see config.h).*/
   ARUint8* dataPtr;
+  cv_bridge::CvImageConstPtr cv_ptr;
+  
   if (image.encoding == sensor_msgs::image_encodings::BGR8)
   {
     dataPtr = (ARUint8*)&image.data.front();
   }
   else
   {
-    cv_bridge::CvImageConstPtr cv_ptr = cv_bridge::toCvCopy(image, "bgr8");
+    cv_ptr = cv_bridge::toCvCopy(image, "bgr8");
     dataPtr = (ARUint8*)cv_ptr->image.data;
   }
 

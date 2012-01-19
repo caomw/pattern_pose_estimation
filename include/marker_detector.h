@@ -84,7 +84,10 @@ private:
   };
 
   int threshold_;
+  bool camera_initialized_;
   std::vector<Marker> markers_;
+
+  static bool has_instance_;
 
 };
 
