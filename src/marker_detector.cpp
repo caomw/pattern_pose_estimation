@@ -247,6 +247,7 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
         // hack for negative z detection (bad pose calculation)
         if (markers_[m].transformation[2][3] < 0)
         {
+          ROS_WARN("-z");
           continue;
         }
         markers_[m].detection_flag = DETECTED;
@@ -259,6 +260,7 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
         marker_msg.confidence = confidence;
         arTransformationToPose(
             markers_[m].transformation, marker_msg.pose.pose);
+        markers_msg.markers.push_back(marker_msg);
       }
     }
   }
