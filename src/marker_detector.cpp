@@ -244,12 +244,20 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
               markers_[m].width, 
               markers_[m].transformation);
         }
+        // hack for negative z detection (bad pose calculation)
+        if (markers_[m].transformation[2][3] < 0)
+        {
+          ROS_WARN("-z");
+          continue;
+        }
         markers_[m].detection_flag = DETECTED;
         ar_pose::ARMarker marker_msg;
         marker_msg.header.frame_id = image.header.frame_id;
         marker_msg.header.stamp = image.header.stamp;
         marker_msg.id = markers_[m].id;
-        marker_msg.confidence = detected_markers[i].cf * 100;
+        int confidence = static_cast<int>(1000.0 * detected_markers[i].area / (image.width * image.height) *
+          detected_markers[i].cf);
+        marker_msg.confidence = confidence;
         arTransformationToPose(
             markers_[m].transformation, marker_msg.pose.pose);
         markers_msg.markers.push_back(marker_msg);
