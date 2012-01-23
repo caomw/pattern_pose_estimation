@@ -13,6 +13,7 @@ msg_gen/
 msg/lisp/
 srv_gen/
 _*.py
+_*.pyc
 
 # CMake files
 CMakeCache.txt
