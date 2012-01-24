@@ -25,7 +25,6 @@ rosbuild_add_library(marker_detection src/marker_detector.cpp
                                       src/marker_detector_node.cpp
                                       src/marker_detector_server.cpp
                                       src/marker_detector_nodelet.cpp)
-target_link_libraries(marker_detection AR)
 
 #common commands for building c++ executables and libraries
 #rosbuild_add_library(${PROJECT_NAME} src/example.cpp)
@@ -36,7 +35,7 @@ rosbuild_add_executable(checkerboard_detector_node src/checkerboard_detector_nod
 rosbuild_add_executable(marker_detector_node src/marker_detector_node_main.cpp)
 rosbuild_add_executable(marker_detector_server src/marker_detector_server_main.cpp)
 
-target_link_libraries(marker_detector_node marker_detection)
-target_link_libraries(marker_detector_server marker_detection)
+target_link_libraries(marker_detector_node marker_detection AR)
+target_link_libraries(marker_detector_server marker_detection AR)
 
 #target_link_libraries(example ${PROJECT_NAME})
