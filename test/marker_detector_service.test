@@ -1,0 +1,10 @@
+<launch>
+
+  <node name="marker_detector_server" pkg="pattern_pose_estimation" type="marker_detector_server" respawn="false" output="screen">
+    <rosparam command="load" file="$(find pattern_pose_estimation)/cfg/marker_detector.yaml" />
+  </node>
+
+  <test test-name="marker_detector_service_test" pkg="pattern_pose_estimation" type="marker_detector_service_test"/>
+
+</launch>
+

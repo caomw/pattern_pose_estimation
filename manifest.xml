@@ -14,6 +14,7 @@
   <depend package="sensor_msgs"/>
   <depend package="tf"/>
   <depend package="cv_bridge"/>
+  <depend package="camera_calibration_parsers"/>
   
   <depend package="ar_pose"/>
   <depend package="artoolkit"/>

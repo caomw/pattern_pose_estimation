@@ -5,12 +5,30 @@
 #include <sensor_msgs/image_encodings.h>
 #include <AR/ar.h>
 
+#include <opencv2/highgui/highgui.hpp>
+
 #include "marker_detector.h"
 
 static const double ROS_TO_AR = 1000.0;
 static const double AR_TO_ROS = 0.001;
 
+static const char* DEBUG_WINDOW_NAME = "MarkerDetector";
+
 bool pattern_pose_estimation::MarkerDetector::has_instance_ = false;
+
+
+void paintMarker(cv::Mat& canvas, const ARMarkerInfo& marker_info)
+{
+  cv::Point2d p1, p2, p3, p4;
+  p1.x = marker_info.vertex[0][0]; p1.y = marker_info.vertex[0][1];
+  p2.x = marker_info.vertex[1][0]; p2.y = marker_info.vertex[1][1];
+  p3.x = marker_info.vertex[2][0]; p3.y = marker_info.vertex[2][1];
+  p4.x = marker_info.vertex[3][0]; p4.y = marker_info.vertex[3][1];
+  cv::line(canvas, p1, p2, cv::Scalar(0, 0, 255));
+  cv::line(canvas, p2, p3, cv::Scalar(0, 0, 255));
+  cv::line(canvas, p3, p4, cv::Scalar(0, 0, 255));
+  cv::line(canvas, p4, p1, cv::Scalar(0, 0, 255));
+}
 
 pattern_pose_estimation::MarkerDetector::MarkerDetector()
   : threshold_(DEFAULT_THRESHOLD), camera_initialized_(false)
@@ -29,6 +47,10 @@ pattern_pose_estimation::MarkerDetector::~MarkerDetector()
   {
     arFreePatt(markers_[i].pattern_id);
   }
+  if (show_debug_image_)
+  {
+    cv::destroyWindow(DEBUG_WINDOW_NAME);
+  }
 }
 
 void pattern_pose_estimation::MarkerDetector::loadSettings(ros::NodeHandle& nh)
@@ -36,6 +58,12 @@ void pattern_pose_estimation::MarkerDetector::loadSettings(ros::NodeHandle& nh)
   int threshold;
   nh.param("threshold", threshold, DEFAULT_THRESHOLD);
   setThreshold(threshold);
+
+  nh.param("show_debug_image", show_debug_image_, false);
+  if (show_debug_image_)
+  {
+    cv::namedWindow(DEBUG_WINDOW_NAME, 1);
+  }
 
   XmlRpc::XmlRpcValue marker_list;
   if (!nh.getParam("markers", marker_list))
@@ -187,7 +215,7 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
 
   if (markers_.size() == 0)
   {
-    return;
+    throw MarkerDetectorException("detect called without any loaded markers");
   }
 
   markers_msg.header.stamp = image.header.stamp;
@@ -212,12 +240,29 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
 
   ARMarkerInfo *detected_markers;
   int num_detected_markers;
-  if (arDetectMarker(dataPtr, threshold_, 
+  // we use arDetectMarkerLite here instead of arDetectMarker
+  // as the latter uses a history for smoothing
+  if (arDetectMarkerLite(dataPtr, threshold_, 
         &detected_markers, &num_detected_markers) < 0)
   {
     throw MarkerDetectorException("arDetectMarker failed");
   }
   ROS_DEBUG("Detected %i markers.", num_detected_markers);
+
+  if (show_debug_image_)
+  {
+    if (!cv_ptr)
+    {
+      cv_ptr = cv_bridge::toCvCopy(image, "bgr8");
+    }
+    cv::Mat canvas = cv_ptr->image.clone();
+    for (int i = 0; i < num_detected_markers; ++i)
+    {
+      paintMarker(canvas, detected_markers[i]);
+    }
+    cv::imshow(DEBUG_WINDOW_NAME, canvas);
+    cv::waitKey(5);
+  }
 
   // identify markers (check for known patterns)
   for (int i = 0; i < num_detected_markers; ++i)
