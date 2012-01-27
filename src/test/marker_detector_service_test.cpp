@@ -82,9 +82,6 @@ TEST_P(MarkerDetectorServiceTest, detectionTest)
 
   EXPECT_TRUE(client.call(service_msg));
 
-  std::cout << "Detected " << service_msg.response.markers.markers.size()
-    << " markers in " << GetParam().image_file << std::endl;
-
   EXPECT_EQ(service_msg.response.markers.markers.size(), 
       GetParam().expected_num_markers);
 }
