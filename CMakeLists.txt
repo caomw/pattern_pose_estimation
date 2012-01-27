@@ -38,4 +38,8 @@ rosbuild_add_executable(marker_detector_server src/marker_detector_server_main.c
 target_link_libraries(marker_detector_node marker_detection AR)
 target_link_libraries(marker_detector_server marker_detection AR)
 
-#target_link_libraries(example ${PROJECT_NAME})
+# unittests
+rosbuild_add_executable(marker_detector_service_test EXCLUDE_FROM_ALL src/test/marker_detector_service_test.cpp)
+rosbuild_add_gtest_build_flags(marker_detector_service_test)
+rosbuild_add_rostest(test/marker_detector_service.test)
+
