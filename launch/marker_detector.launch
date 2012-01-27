@@ -7,7 +7,8 @@
     <rosparam command="load" file="$(find pattern_pose_estimation)/cfg/marker_detector.yaml" />
 	<param name="use_history" type="bool" value="true"/>
 	<param name="cache_camera_info" type="bool" value="true"/>
-	<param name="lazy" type="bool" value="true"/>
+	<param name="lazy" type="bool" value="false"/>
+	<param name="show_debug_image" value="true"/>
   </node>
 
 </launch>
