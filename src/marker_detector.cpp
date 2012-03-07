@@ -24,10 +24,10 @@ void paintMarker(cv::Mat& canvas, const ARMarkerInfo& marker_info)
   p2.x = marker_info.vertex[1][0]; p2.y = marker_info.vertex[1][1];
   p3.x = marker_info.vertex[2][0]; p3.y = marker_info.vertex[2][1];
   p4.x = marker_info.vertex[3][0]; p4.y = marker_info.vertex[3][1];
-  cv::line(canvas, p1, p2, cv::Scalar(0, 0, 255));
-  cv::line(canvas, p2, p3, cv::Scalar(0, 0, 255));
-  cv::line(canvas, p3, p4, cv::Scalar(0, 0, 255));
-  cv::line(canvas, p4, p1, cv::Scalar(0, 0, 255));
+  cv::line(canvas, p1, p2, cv::Scalar(255, 0, 255), 2);
+  cv::line(canvas, p2, p3, cv::Scalar(255, 0, 255), 2);
+  cv::line(canvas, p3, p4, cv::Scalar(255, 0, 255), 2);
+  cv::line(canvas, p4, p1, cv::Scalar(255, 0, 255), 2);
 }
 
 pattern_pose_estimation::MarkerDetector::MarkerDetector()
@@ -62,7 +62,7 @@ void pattern_pose_estimation::MarkerDetector::loadSettings(ros::NodeHandle& nh)
   nh.param("show_debug_image", show_debug_image_, false);
   if (show_debug_image_)
   {
-    cv::namedWindow(DEBUG_WINDOW_NAME, 1);
+    cv::namedWindow(DEBUG_WINDOW_NAME, 0);
   }
 
   XmlRpc::XmlRpcValue marker_list;
