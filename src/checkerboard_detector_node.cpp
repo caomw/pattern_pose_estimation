@@ -30,7 +30,6 @@ private:
 
   bool rectified_;      // should be true if input image is rectified
   int cols_, rows_;     // number of internal internal corners
-  double square_size_;  // square size
   bool show_detection_; // draw detection on screen
   
 public:
@@ -45,14 +44,21 @@ public:
   {
     nh_priv_.param("cols", cols_, 8);
     nh_priv_.param("rows", rows_, 6);
-    nh_priv_.param("size", square_size_, 0.06);
+    double square_size;
+    nh_priv_.param("size", square_size, 0.06);
     nh_priv_.param("rectified", rectified_, true);
     nh_priv_.param("show_detection", show_detection_, false);
     ROS_INFO_STREAM("Image is already rectified : " << rectified_);
-    ROS_INFO_STREAM("Checkerboard parameters: " << rows_ << "x" << cols_ << ", size is " << square_size_);
+    ROS_INFO_STREAM("Checkerboard parameters: " << rows_ << "x" << cols_ << ", size is " << square_size);
+    float cx = square_size * cols_ / 2;
+    float cy = square_size * rows_ / 2;
+    // we define the world points in a way that cv::solvePnP directly gives us
+    // the checkerboard transformation as we want it:
+    // center is at boards center, x points right (alignd with rows),
+    // y points up (aligned with cols), z points out of the pattern.
     for (int i=0; i<rows_; i++)
       for(int j=0; j<cols_; j++)
-        points3d_.push_back(cv::Point3f(j*square_size_,i*square_size_,0.0));
+        points3d_.push_back(cv::Point3f(cx - j*square_size, i*square_size - cy, 0.0));
 
     ROS_INFO_STREAM("Subscribing to image ropic " << nh_.resolveName("image"));
     camera_sub_ = it_.subscribeCamera("image", 1, &CheckerboardDetector::detect, this);
@@ -97,7 +103,8 @@ public:
     cv_bridge::CvImageConstPtr cv_image = cv_bridge::toCvShare(image, sensor_msgs::image_encodings::MONO8);
     const cv::Mat& mat = cv_image->image;
     std::vector<cv::Point2f> corners;
-    bool success = cv::findChessboardCorners(mat, cv::Size(cols_, rows_), corners);
+    bool success = cv::findChessboardCorners(mat, cv::Size(cols_, rows_), corners,
+        CV_CALIB_CB_ADAPTIVE_THRESH + CV_CALIB_CB_NORMALIZE_IMAGE + CV_CALIB_CB_FAST_CHECK);
     if (!success)
     {
       ROS_WARN_STREAM("Checkerboard not detected");
