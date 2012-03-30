@@ -9,6 +9,7 @@
 	<param name="use_history" type="bool" value="true"/>
 	<param name="cache_camera_info" type="bool" value="true"/>
 	<param name="lazy" type="bool" value="false"/>
+	<param name="rectified" type="bool" value="true"/>
 	<param name="show_debug_image" value="true"/>
   </node>
 
