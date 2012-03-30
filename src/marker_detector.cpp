@@ -299,7 +299,7 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
         marker_msg.header.frame_id = image.header.frame_id;
         marker_msg.header.stamp = image.header.stamp;
         marker_msg.id = markers_[m].id;
-        int confidence = static_cast<int>(1000.0 * detected_markers[i].area / (image.width * image.height) *
+        int confidence = static_cast<int>(100000.0 * detected_markers[i].area / (image.width * image.height) *
           detected_markers[i].cf);
         marker_msg.confidence = confidence;
         arTransformationToPose(
