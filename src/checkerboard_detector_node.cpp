@@ -13,8 +13,6 @@
 #include <iostream>
 
 
-static const char* WINDOW_NAME = "Checkerboard Detection";
-
 class CheckerboardDetector
 {
 private:
@@ -31,6 +29,9 @@ private:
   bool rectified_;      // should be true if input image is rectified
   int cols_, rows_;     // number of internal internal corners
   bool show_detection_; // draw detection on screen
+  std::string frame_id_; // id for the checkerboard's tf
+
+  std::string window_name_;
   
 public:
 
@@ -48,6 +49,7 @@ public:
     nh_priv_.param("size", square_size, 0.06);
     nh_priv_.param("rectified", rectified_, true);
     nh_priv_.param("show_detection", show_detection_, false);
+    nh_priv_.param("frame_id", frame_id_, std::string("checkerboard"));
     ROS_INFO_STREAM("Image is already rectified : " << rectified_);
     ROS_INFO_STREAM("Checkerboard parameters: " << rows_ << "x" << cols_ << ", size is " << square_size);
     float cx = square_size * cols_ / 2;
@@ -70,7 +72,9 @@ public:
     camera_sub_ = it_.subscribeCamera("image", 1, &CheckerboardDetector::detect, this);
 
     pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("checkerboard_pose", 1);
-    cv::namedWindow(WINDOW_NAME, 0);
+
+    window_name_ = "checkerboard detection - " + frame_id_;
+    cv::namedWindow(window_name_, 0);
   }
   
   void sendMessageAndTransform(const cv::Mat& t_vec, const cv::Mat& r_vec, const ros::Time& stamp, const std::string& camera_frame_id)
@@ -82,7 +86,7 @@ public:
     tf::Vector3 translation(t_vec.at<double>(0, 0), t_vec.at<double>(1, 0), t_vec.at<double>(2, 0));
 
     tf::Transform transform(quaternion, translation);
-    tf::StampedTransform stamped_transform(transform, stamp, camera_frame_id, "checkerboard");
+    tf::StampedTransform stamped_transform(transform, stamp, camera_frame_id, frame_id_);
     tf_broadcaster_.sendTransform(stamped_transform);
 
     geometry_msgs::PoseStamped pose_msg;
@@ -106,7 +110,7 @@ public:
       ROS_WARN_STREAM("Checkerboard not detected");
       if (show_detection_)
       {
-           cv::imshow(WINDOW_NAME, mat);
+           cv::imshow(window_name_, mat);
            cv::waitKey(5);
       }
       return;
@@ -146,7 +150,7 @@ public:
         cv::Mat draw;
         cv::cvtColor(mat, draw, CV_GRAY2BGR);
         cv::drawChessboardCorners(draw, cv::Size(cols_,rows_), corners, true);
-        cv::imshow(WINDOW_NAME, draw);
+        cv::imshow(window_name_, draw);
         cv::waitKey(5);
     }
   }
