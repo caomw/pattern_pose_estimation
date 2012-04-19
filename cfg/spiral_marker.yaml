@@ -1,0 +1,11 @@
+threshold: 100
+markers: 
+  [
+    # format is id, pattern_file_name, width, center_x, center_y
+    [  1,  "package://ar_pose/data/4x4/4x4_95.patt", 0.120, -0.110,  0.030 ],
+    [  2,  "package://ar_pose/data/4x4/4x4_91.patt", 0.075,  0.020,  0.060 ],
+    [  3,  "package://ar_pose/data/4x4/4x4_54.patt", 0.045,  0.040, -0.020 ],
+    [  4,  "package://ar_pose/data/4x4/4x4_78.patt", 0.030, -0.010, -0.030 ],
+    [  5,  "package://ar_pose/data/4x4/4x4_15.patt", 0.015, -0.020,  0.000 ],
+    [  6,  "package://ar_pose/data/4x4/4x4_98.patt", 0.015,  0.000,  0.000 ]
+  ]
