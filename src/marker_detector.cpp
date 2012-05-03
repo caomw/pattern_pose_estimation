@@ -324,13 +324,15 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
 void pattern_pose_estimation::MarkerDetector::arTransformationToPose(
     double ar_transformation[3][4], geometry_msgs::Pose& pose)
 {
-  double arQuat[4], arPos[3];
-  arUtilMat2QuatPos(ar_transformation, arQuat, arPos);
-  tf::Vector3 translation(arPos[0] * AR_TO_ROS, 
-                          arPos[1] * AR_TO_ROS, 
-                          arPos[2] * AR_TO_ROS);
-  tf::Quaternion rotation(-arQuat[0], -arQuat[1], -arQuat[2], arQuat[3]);
-  tf::Transform tf_transform(rotation, translation);
+  tf::Vector3 translation(ar_transformation[0][3] * AR_TO_ROS, 
+                          ar_transformation[1][3] * AR_TO_ROS, 
+                          ar_transformation[2][3] * AR_TO_ROS);
+  btMatrix3x3 rot_mat(ar_transformation[0][0], ar_transformation[0][1], ar_transformation[0][2],
+                       ar_transformation[1][0], ar_transformation[1][1], ar_transformation[1][2],
+                       ar_transformation[2][0], ar_transformation[2][1], ar_transformation[2][2]);
+  tf::Quaternion q;
+  rot_mat.getRotation(q);
+  tf::Transform tf_transform(q, translation);
   tf::poseTFToMsg(tf_transform, pose);
 }
 
