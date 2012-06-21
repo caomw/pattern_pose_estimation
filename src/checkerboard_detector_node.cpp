@@ -119,7 +119,6 @@ public:
                      cv::TermCriteria(CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
     cv::Mat t_vec(3,1,CV_64FC1);
     cv::Mat r_vec(3,1,CV_64FC1);
-    cv::Mat r_mat(3,3,CV_64FC1);
     cv::Mat points_mat(points3d_);
     cv::Mat corners_mat(corners);
     if (rectified_)
@@ -138,7 +137,6 @@ public:
         const cv::Mat D(4,1, CV_64FC1, const_cast<double*>(cam_info->D.data()));
         cv::solvePnP(points_mat, corners_mat, K, D, r_vec, t_vec);
     }
-    cv::Rodrigues(r_vec, r_mat);
 
     ros::Time stamp = image->header.stamp;
     if (stamp.toSec()==0.0)
