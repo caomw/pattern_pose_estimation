@@ -327,7 +327,7 @@ void pattern_pose_estimation::MarkerDetector::arTransformationToPose(
   tf::Vector3 translation(ar_transformation[0][3] * AR_TO_ROS, 
                           ar_transformation[1][3] * AR_TO_ROS, 
                           ar_transformation[2][3] * AR_TO_ROS);
-  btMatrix3x3 rot_mat(ar_transformation[0][0], ar_transformation[0][1], ar_transformation[0][2],
+  tf::Matrix3x3 rot_mat(ar_transformation[0][0], ar_transformation[0][1], ar_transformation[0][2],
                        ar_transformation[1][0], ar_transformation[1][1], ar_transformation[1][2],
                        ar_transformation[2][0], ar_transformation[2][1], ar_transformation[2][2]);
   tf::Quaternion q;
