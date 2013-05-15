@@ -34,6 +34,7 @@ rosbuild_add_library(marker_detection src/marker_detector.cpp
 rosbuild_add_executable(checkerboard_detector_node src/checkerboard_detector_node.cpp)
 rosbuild_add_executable(marker_detector_node src/marker_detector_node_main.cpp)
 rosbuild_add_executable(marker_detector_server src/marker_detector_server_main.cpp)
+rosbuild_add_executable(marker_filter_node src/marker_filter_node.cpp)
 
 target_link_libraries(marker_detector_node marker_detection AR)
 target_link_libraries(marker_detector_server marker_detection AR)

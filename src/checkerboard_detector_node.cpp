@@ -13,8 +13,6 @@
 #include <iostream>
 
 
-static const char* WINDOW_NAME = "Checkerboard Detection";
-
 class CheckerboardDetector
 {
 private:
@@ -30,8 +28,10 @@ private:
 
   bool rectified_;      // should be true if input image is rectified
   int cols_, rows_;     // number of internal internal corners
-  double square_size_;  // square size
   bool show_detection_; // draw detection on screen
+  std::string frame_id_; // id for the checkerboard's tf
+
+  std::string window_name_;
   
 public:
 
@@ -45,30 +45,36 @@ public:
   {
     nh_priv_.param("cols", cols_, 8);
     nh_priv_.param("rows", rows_, 6);
-    nh_priv_.param("size", square_size_, 0.06);
+    double square_size;
+    nh_priv_.param("size", square_size, 0.06);
     nh_priv_.param("rectified", rectified_, true);
     nh_priv_.param("show_detection", show_detection_, false);
+    nh_priv_.param("frame_id", frame_id_, std::string("checkerboard"));
     ROS_INFO_STREAM("Image is already rectified : " << rectified_);
-    ROS_INFO_STREAM("Checkerboard parameters: " << rows_ << "x" << cols_ << ", size is " << square_size_);
+    ROS_INFO_STREAM("Checkerboard parameters: " << rows_ << "x" << cols_ << ", size is " << square_size);
+    float cx = square_size * cols_ / 2;
+    float cy = square_size * rows_ / 2;
+    // we define the world points in a way that cv::solvePnP directly gives us
+    // the camera->checkerboard transformation as we want it:
+    // center is at boards center, x points right (alignd with rows),
+    // y points up (aligned with cols), z points out of the pattern.
     for (int i=0; i<rows_; i++)
+    {
       for(int j=0; j<cols_; j++)
-        points3d_.push_back(cv::Point3f(j*square_size_,i*square_size_,0.0));
+      {
+        double x = j * square_size - cx;
+        double y = cy - i * square_size;
+        points3d_.push_back(cv::Point3f(x, y, 0.0));
+      }
+    }
 
     ROS_INFO_STREAM("Subscribing to image ropic " << nh_.resolveName("image"));
     camera_sub_ = it_.subscribeCamera("image", 1, &CheckerboardDetector::detect, this);
 
     pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("checkerboard_pose", 1);
-    cv::namedWindow(WINDOW_NAME, 0);
-  }
-  
-  void report(const cv::Mat& t_vec, const cv::Mat& r_vec, const cv::Mat& r_mat)
-  {
-    std::cout << "Current checkerboard pose is:\n";
-    std::cout << "R  = [ " << r_mat.at<double>(0,0) << " " << r_mat.at<double>(0,1) << " " << r_mat.at<double>(0,2) << " ]\n"; 
-    std::cout << "     [ " << r_mat.at<double>(1,0) << " " << r_mat.at<double>(1,1) << " " << r_mat.at<double>(1,2) << " ]\n";
-    std::cout << "     [ " << r_mat.at<double>(2,0) << " " << r_mat.at<double>(2,1) << " " << r_mat.at<double>(2,2) << " ]\n"; 
-    std::cout << "Rv = [ " << r_vec.at<double>(0,0) << " " << r_vec.at<double>(1,0) << " " << r_vec.at<double>(2,0) << " ]\n";
-    std::cout << "T  = [ " << t_vec.at<double>(0,0) << " " << t_vec.at<double>(1,0) << " " << t_vec.at<double>(2,0) << " ]\n";
+
+    window_name_ = "checkerboard detection - " + frame_id_;
+    cv::namedWindow(window_name_, 0);
   }
   
   void sendMessageAndTransform(const cv::Mat& t_vec, const cv::Mat& r_vec, const ros::Time& stamp, const std::string& camera_frame_id)
@@ -80,7 +86,7 @@ public:
     tf::Vector3 translation(t_vec.at<double>(0, 0), t_vec.at<double>(1, 0), t_vec.at<double>(2, 0));
 
     tf::Transform transform(quaternion, translation);
-    tf::StampedTransform stamped_transform(transform, stamp, camera_frame_id, "checkerboard");
+    tf::StampedTransform stamped_transform(transform, stamp, camera_frame_id, frame_id_);
     tf_broadcaster_.sendTransform(stamped_transform);
 
     geometry_msgs::PoseStamped pose_msg;
@@ -97,13 +103,14 @@ public:
     cv_bridge::CvImageConstPtr cv_image = cv_bridge::toCvShare(image, sensor_msgs::image_encodings::MONO8);
     const cv::Mat& mat = cv_image->image;
     std::vector<cv::Point2f> corners;
-    bool success = cv::findChessboardCorners(mat, cv::Size(cols_, rows_), corners);
+    bool success = cv::findChessboardCorners(mat, cv::Size(cols_, rows_), corners,
+        CV_CALIB_CB_ADAPTIVE_THRESH + CV_CALIB_CB_NORMALIZE_IMAGE + CV_CALIB_CB_FAST_CHECK);
     if (!success)
     {
       ROS_WARN_STREAM("Checkerboard not detected");
       if (show_detection_)
       {
-           cv::imshow(WINDOW_NAME, mat);
+           cv::imshow(window_name_, mat);
            cv::waitKey(5);
       }
       return;
@@ -112,7 +119,6 @@ public:
                      cv::TermCriteria(CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
     cv::Mat t_vec(3,1,CV_64FC1);
     cv::Mat r_vec(3,1,CV_64FC1);
-    cv::Mat r_mat(3,3,CV_64FC1);
     cv::Mat points_mat(points3d_);
     cv::Mat corners_mat(corners);
     if (rectified_)
@@ -131,9 +137,7 @@ public:
         const cv::Mat D(4,1, CV_64FC1, const_cast<double*>(cam_info->D.data()));
         cv::solvePnP(points_mat, corners_mat, K, D, r_vec, t_vec);
     }
-    cv::Rodrigues(r_vec, r_mat);
 
-    report(t_vec, r_vec, r_mat);
     ros::Time stamp = image->header.stamp;
     if (stamp.toSec()==0.0)
       stamp = ros::Time::now();
@@ -144,7 +148,7 @@ public:
         cv::Mat draw;
         cv::cvtColor(mat, draw, CV_GRAY2BGR);
         cv::drawChessboardCorners(draw, cv::Size(cols_,rows_), corners, true);
-        cv::imshow(WINDOW_NAME, draw);
+        cv::imshow(window_name_, draw);
         cv::waitKey(5);
     }
   }

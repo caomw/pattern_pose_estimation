@@ -24,10 +24,10 @@ void paintMarker(cv::Mat& canvas, const ARMarkerInfo& marker_info)
   p2.x = marker_info.vertex[1][0]; p2.y = marker_info.vertex[1][1];
   p3.x = marker_info.vertex[2][0]; p3.y = marker_info.vertex[2][1];
   p4.x = marker_info.vertex[3][0]; p4.y = marker_info.vertex[3][1];
-  cv::line(canvas, p1, p2, cv::Scalar(0, 0, 255));
-  cv::line(canvas, p2, p3, cv::Scalar(0, 0, 255));
-  cv::line(canvas, p3, p4, cv::Scalar(0, 0, 255));
-  cv::line(canvas, p4, p1, cv::Scalar(0, 0, 255));
+  cv::line(canvas, p1, p2, cv::Scalar(255, 0, 255), 2);
+  cv::line(canvas, p2, p3, cv::Scalar(255, 0, 255), 2);
+  cv::line(canvas, p3, p4, cv::Scalar(255, 0, 255), 2);
+  cv::line(canvas, p4, p1, cv::Scalar(255, 0, 255), 2);
 }
 
 pattern_pose_estimation::MarkerDetector::MarkerDetector()
@@ -62,7 +62,7 @@ void pattern_pose_estimation::MarkerDetector::loadSettings(ros::NodeHandle& nh)
   nh.param("show_debug_image", show_debug_image_, false);
   if (show_debug_image_)
   {
-    cv::namedWindow(DEBUG_WINDOW_NAME, 1);
+    cv::namedWindow(DEBUG_WINDOW_NAME, 0);
   }
 
   XmlRpc::XmlRpcValue marker_list;
@@ -299,7 +299,7 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
         marker_msg.header.frame_id = image.header.frame_id;
         marker_msg.header.stamp = image.header.stamp;
         marker_msg.id = markers_[m].id;
-        int confidence = static_cast<int>(1000.0 * detected_markers[i].area / (image.width * image.height) *
+        int confidence = static_cast<int>(100000.0 * detected_markers[i].area / (image.width * image.height) *
           detected_markers[i].cf);
         marker_msg.confidence = confidence;
         arTransformationToPose(
@@ -324,13 +324,15 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
 void pattern_pose_estimation::MarkerDetector::arTransformationToPose(
     double ar_transformation[3][4], geometry_msgs::Pose& pose)
 {
-  double arQuat[4], arPos[3];
-  arUtilMat2QuatPos(ar_transformation, arQuat, arPos);
-  tf::Vector3 translation(arPos[0] * AR_TO_ROS, 
-                          arPos[1] * AR_TO_ROS, 
-                          arPos[2] * AR_TO_ROS);
-  tf::Quaternion rotation(-arQuat[0], -arQuat[1], -arQuat[2], arQuat[3]);
-  tf::Transform tf_transform(rotation, translation);
+  tf::Vector3 translation(ar_transformation[0][3] * AR_TO_ROS, 
+                          ar_transformation[1][3] * AR_TO_ROS, 
+                          ar_transformation[2][3] * AR_TO_ROS);
+  tf::Matrix3x3 rot_mat(ar_transformation[0][0], ar_transformation[0][1], ar_transformation[0][2],
+                       ar_transformation[1][0], ar_transformation[1][1], ar_transformation[1][2],
+                       ar_transformation[2][0], ar_transformation[2][1], ar_transformation[2][2]);
+  tf::Quaternion q;
+  rot_mat.getRotation(q);
+  tf::Transform tf_transform(q, translation);
   tf::poseTFToMsg(tf_transform, pose);
 }
 
