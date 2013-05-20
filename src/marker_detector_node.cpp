@@ -17,13 +17,15 @@ pattern_pose_estimation::MarkerDetectorNode::MarkerDetectorNode(
   detector_.loadSettings(nh_private_);
 
   nh_private_.param("publish_tf", publish_tf_, true);
-  ROS_INFO ("\tPublish transforms: %d", publish_tf_);
+  //ROS_INFO ("\tPublish transforms: %d", publish_tf_);
+  ROS_INFO_STREAM ("\tPublish transforms? " << (publish_tf_ ? "true" : "false"));
 
   nh_private_.param("marker_frame", marker_frame_, std::string("ar_marker"));
   ROS_INFO ("\tMarker frame: %s", marker_frame_.c_str());
 
   nh_private_.param("use_history", use_history_, true);
-  ROS_INFO("\tUse history: %d", use_history_);
+  //ROS_INFO("\tUse history: %d", use_history_);
+  ROS_INFO_STREAM ("\tUse history? " << (use_history_ ? "true" : "false"));
 
   nh_private_.param ("rectified", rectified_, false);
   ROS_INFO_STREAM ("\trectified? " << (rectified_ ? "true" : "false"));
