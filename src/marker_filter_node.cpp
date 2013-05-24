@@ -26,7 +26,14 @@ private:
 
 	bool use_wwf_;				// filter the resultant pose using a weighted window filter (wwf)
 	double ramp_wwf_;			// ramp used for the wwf
-	int max_samples_wwf_;		// maximum number of samples used for the wwf
+	int num_samples_wwf_;		// number of samples used for the wwf
+
+
+	double * x_array, * y_array, * z_array/*, * roll_array, * pitch_array, * yaw_array*/;
+	double * sR_array, * cR_array, * sP_array, * cP_array, * sY_array, * cY_array;
+	double * t_array, * w_array; // times and weights
+	int wwf_index;
+	bool full_arrays;
 
 	ros::Subscriber markers_sub_;
 	ros::Publisher pose_pub_;
@@ -56,8 +63,8 @@ public:
 		nh_priv_.param("ramp_wwf", ramp_wwf_, 0.5);
 		ROS_INFO("\tRamp WWF: %f", ramp_wwf_);
 
-		nh_priv_.param("max_samples_wwf", max_samples_wwf_, 10);
-		ROS_INFO("\tMax samples WWF: %d", max_samples_wwf_);
+		nh_priv_.param("num_samples_wwf", num_samples_wwf_, 10);
+		ROS_INFO("\tNum samples WWF: %d", num_samples_wwf_);
 
 		nh_priv_.param("publish_tf", publish_tf_, true);
 		ROS_INFO_STREAM("\tPublish transforms? " << (publish_tf_ ? "true" : "false"));
@@ -67,6 +74,40 @@ public:
 
 		if (publish_tf_) {
 			markers_sub_ = nh_.subscribe("ar_pose_markers", 0, &MarkerFilterNode::markersCallback, this);
+		}
+
+		//fill circular arrays with zeros
+		wwf_index = 0;
+		x_array = new double[num_samples_wwf_];
+		y_array = new double[num_samples_wwf_];
+		z_array = new double[num_samples_wwf_];
+		/*roll_array = new double[num_samples_wwf_];
+		pitch_array = new double[num_samples_wwf_];
+		yaw_array = new double[num_samples_wwf_];*/
+		sR_array = new double[num_samples_wwf_];
+		cR_array = new double[num_samples_wwf_];
+		sP_array = new double[num_samples_wwf_];
+		cP_array = new double[num_samples_wwf_];
+		sY_array = new double[num_samples_wwf_];
+		cY_array = new double[num_samples_wwf_];
+		t_array = new double[num_samples_wwf_];
+		w_array = new double[num_samples_wwf_];
+		full_arrays = false;
+		for(int i = 0; i< num_samples_wwf_; i++){
+			x_array[i] = 0.0;
+			y_array[i] = 0.0;
+			z_array[i] = 0.0;
+			/*roll_array[i] = 0.0;
+			pitch_array[i] = 0.0;
+			yaw_array[i] = 0.0;*/
+			sR_array[i] = 0.0;
+			cR_array[i] = 0.0;
+			sP_array[i] = 0.0;
+			cP_array[i] = 0.0;
+			sY_array[i] = 0.0;
+			cY_array[i] = 0.0;
+			t_array[i] = 0.0;	//times
+			w_array[i] = 0.0;	//weights
 		}
 
 		ros::SubscriberStatusCallback connect_cb = boost::bind(&MarkerFilterNode::connectCallback, this, _1);
@@ -291,6 +332,85 @@ public:
 
 		if(use_wwf_){
 
+			filt_pose = new_pose; // the header and covariance matrix are taken from the new pose
+
+			//save vX and vY into circular arrays of N elements
+			x_array[wwf_index] = new_pose.pose.pose.position.x;
+			y_array[wwf_index] = new_pose.pose.pose.position.y;
+			z_array[wwf_index] = new_pose.pose.pose.position.z;
+
+			tf::Quaternion quatN;
+			tf::quaternionMsgToTF(new_pose.pose.pose.orientation, quatN);
+			tf::Matrix3x3 mCentroid(quatN);
+			double roll, pitch, yaw;
+			mCentroid.getRPY(roll, pitch, yaw);
+			sR_array[wwf_index] = sin(roll);
+			cR_array[wwf_index] = cos(roll);
+			sP_array[wwf_index] = sin(pitch);
+			cP_array[wwf_index] = cos(pitch);
+			sY_array[wwf_index] = sin(yaw);
+			cY_array[wwf_index] = cos(yaw);
+
+			//save msg_time into circular array
+			ros::Time now = new_pose.header.stamp;	//<-- use of msg time
+			t_array[wwf_index] = now.toSec();
+
+			//compute weights for every element of the arrays
+			int num_elem = num_samples_wwf_;
+			if(!full_arrays){
+				num_elem = wwf_index + 1;	//to leave weights of empty cells to zero
+			}
+			double w_total = 0.0;
+			for(int i = 0; i < num_elem; i++){
+				double t_aux = t_array[i] - t_array[wwf_index]; //<=0
+				w_array[i] = std::max(0.0,ramp_wwf_*t_aux + 1);
+				w_total += w_array[i];
+			}
+			//compute and save estimated pose
+			double w_aux; // weight
+			double posX, posY, posZ, sinR, cosR, sinP, cosP, sinY, cosY;
+			posX = posY = posZ = sinR = cosR = sinP = cosP = sinY = cosY = 0.0;
+
+			for(int i = 0; i < num_elem; i++){
+				w_aux = w_array[i]/w_total;
+				posX += w_aux * x_array[i];
+				posY += w_aux * y_array[i];
+				posZ += w_aux * z_array[i];
+				sinR += w_aux * sR_array[i];
+				cosR += w_aux * cR_array[i];
+				sinP += w_aux * sP_array[i];
+				cosP += w_aux * cP_array[i];
+				sinY += w_aux * sY_array[i];
+				cosY += w_aux * cY_array[i];
+				/*oriR += w_aux * roll_array[i];
+				oriP += w_aux * pitch_array[i];
+				oriY += w_aux * yaw_array[i];*/
+				/*oriR = atan2(sin(oriR)*cos(w_aux * roll_array[i]) + cos(oriR)*sin(w_aux * roll_array[i]),
+						cos(oriR)*cos(w_aux * roll_array[i]) - sin(oriR)*sin(w_aux * roll_array[i]));
+				oriP = atan2(sin(oriP)*cos(w_aux * pitch_array[i]) + cos(oriP)*sin(w_aux * pitch_array[i]),
+						cos(oriP)*cos(w_aux * pitch_array[i]) - sin(oriP)*sin(w_aux * pitch_array[i]));
+				oriY = atan2(sin(oriY)*cos(w_aux * yaw_array[i]) + cos(oriY)*sin(w_aux * yaw_array[i]),
+						cos(oriY)*cos(w_aux * yaw_array[i]) - sin(oriY)*sin(w_aux * yaw_array[i]));*/
+			}
+
+			filt_pose.pose.pose.position.x = posX;
+			filt_pose.pose.pose.position.y = posY;
+			filt_pose.pose.pose.position.z = posZ;
+
+			double oriR = atan2(sinR, cosR);
+			double oriP = atan2(sinP, cosP);
+			double oriY = atan2(sinY, cosY);
+
+			tf::Quaternion btQ;
+			btQ = tf::createQuaternionFromRPY(oriR, oriP, oriY);
+			tf::quaternionTFToMsg(btQ, filt_pose.pose.pose.orientation);
+
+			//increase the iterator
+			wwf_index ++;
+			if (wwf_index==num_samples_wwf_){
+				full_arrays = true;
+				wwf_index = 0;
+			}
 		}else{
 			filt_pose = new_pose;
 		}

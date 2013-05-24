@@ -16,9 +16,13 @@
 
   <node name="marker_filter" pkg="pattern_pose_estimation" type="marker_filter_node" output="screen">
 	<param name="publish_tf" value="true"/>
-	<param name="filter_mode" value="kbags"/>
 	<!--param name="filter_mode" value="best"/-->
-	<param name="kbags_thd" value="0.05"/>
+	<param name="filter_mode" value="kbags"/>
+	<param name="kbags_lin_thd" value="0.05"/>
+	<param name="kbags_ang_thd" value="0.17"/>
+	<param name="use_wwf" value="true"/>
+	<param name="ramp_wwf" value="0.5"/>
+	<param name="num_samples_wwf" value="10"/>
   </node>
 
 </launch>
