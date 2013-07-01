@@ -144,8 +144,10 @@ public:
 				tf::StampedTransform camToMarker(transform, markers_msg->header.stamp, markers_msg->header.frame_id, frame_id_);
 				broadcaster_.sendTransform(camToMarker);
 			}
+			//TODO: publish status ko
 		} else {
 			ROS_INFO("No confident marker pose found");
+			//TODO: publish status ko
 		}
 	}
 
@@ -253,9 +255,13 @@ public:
 							double rollCentroid, pitchCentroid, yawCentroid;
 							mCentroid.getRPY(rollCentroid, pitchCentroid, yawCentroid);
 
-							double diffRoll = abs(rollMarker - rollCentroid);
+							/*double diffRoll = abs(rollMarker - rollCentroid);
 							double diffPitch = abs(pitchMarker - pitchCentroid);
-							double diffYaw = abs(yawMarker - yawCentroid);
+							double diffYaw = abs(yawMarker - yawCentroid);*/
+
+							double diffRoll = abs(acos(cos(rollMarker)*cos(rollCentroid) + sin(rollMarker)*sin(rollCentroid)));
+							double diffPitch = abs(acos(cos(pitchMarker)*cos(pitchCentroid) + sin(pitchMarker)*sin(pitchCentroid)));
+							double diffYaw = abs(acos(cos(yawMarker)*cos(yawCentroid) + sin(yawMarker)*sin(yawCentroid)));
 
 							if ((diffRoll <= kbags_ang_thd_)
 									&& (diffPitch <= kbags_ang_thd_)
