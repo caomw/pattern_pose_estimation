@@ -175,8 +175,9 @@ public:
 		} else if (filter_mode_ == "wmean") {
 
 			double total_conf = 0.0;
-			double mean_x, mean_y, mean_z, mean_roll, mean_pitch, mean_yaw;
-			mean_x = mean_y = mean_z = mean_roll = mean_pitch = mean_yaw = 0.0;
+			double mean_x, mean_y, mean_z, mean_c_roll, mean_s_roll, mean_c_pitch, mean_s_pitch, mean_c_yaw, mean_s_yaw;
+			mean_x = mean_y = mean_z = 0.0;
+			mean_c_roll = mean_s_roll = mean_c_pitch = mean_s_pitch = mean_c_yaw = mean_s_yaw = 0.0;
 
 			for (size_t i = 0; i < markers_msg.markers.size(); ++i) {
 				double conf = markers_msg.markers[i].confidence;
@@ -194,9 +195,12 @@ public:
 				double roll, pitch, yaw;
 				m.getRPY(roll, pitch, yaw);
 
-				mean_roll += conf * roll;
-				mean_pitch += conf * pitch;
-				mean_yaw += conf * yaw;
+				mean_c_roll += conf * cos(roll);
+				mean_s_roll += conf * sin(roll);
+				mean_c_pitch += conf * cos(pitch);
+				mean_s_pitch += conf * sin(pitch);
+				mean_c_yaw += conf * cos(yaw);
+				mean_s_yaw += conf * sin(yaw);
 
 				total_conf += conf;
 			}
@@ -204,9 +208,16 @@ public:
 			mean_x = mean_x / total_conf;
 			mean_y = mean_y / total_conf;
 			mean_z = mean_z / total_conf;
-			mean_roll = mean_roll / total_conf;
-			mean_pitch = mean_pitch / total_conf;
-			mean_yaw = mean_yaw / total_conf;
+			mean_c_roll = mean_c_roll / total_conf;
+			mean_s_roll = mean_s_roll / total_conf;
+			mean_c_pitch = mean_c_pitch / total_conf;
+			mean_s_pitch = mean_s_pitch / total_conf;
+			mean_c_yaw = mean_c_yaw / total_conf;
+			mean_s_yaw = mean_s_yaw / total_conf;
+
+			double mean_roll =  atan2(mean_s_roll, mean_c_roll);
+			double mean_pitch =  atan2(mean_s_pitch, mean_c_pitch);
+			double mean_yaw =  atan2(mean_s_yaw, mean_c_yaw);
 
 			pose_msg.pose.position.x = mean_x;
 			pose_msg.pose.position.y = mean_y;
