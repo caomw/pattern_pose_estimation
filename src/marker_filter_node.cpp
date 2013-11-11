@@ -19,6 +19,7 @@ private:
 	std::string filter_mode_;
 
 	std::string frame_id_;
+	std::string marker_msg_;
 	bool publish_tf_;
 
 	double kbags_lin_thd_;// factor used when computing the maximum distance between elements of the same bag in mbags mode
@@ -72,8 +73,11 @@ public:
 		nh_priv_.param("frame_id", frame_id_, std::string("marker"));
 		ROS_INFO("\tFrame id: %s", frame_id_.c_str());
 
+		nh_priv_.param("marker_msg", marker_msg_, std::string("ar_pose_markers"));
+  		ROS_INFO ("\tMarker Message: %s", marker_msg_.c_str());
+
 		if (publish_tf_) {
-			markers_sub_ = nh_.subscribe("ar_pose_markers", 0, &MarkerFilterNode::markersCallback, this);
+			markers_sub_ = nh_.subscribe(marker_msg_, 0, &MarkerFilterNode::markersCallback, this);
 		}
 
 		//fill circular arrays with zeros
@@ -121,7 +125,7 @@ public:
 			bool has_subscribers = pose_pub_.getNumSubscribers() > 0;
 			if (has_subscribers) {
 				ROS_INFO("Subscribing to marker msg.");
-				markers_sub_ = nh_.subscribe("ar_pose_markers", 0, &MarkerFilterNode::markersCallback, this);
+				markers_sub_ = nh_.subscribe(marker_msg_, 0, &MarkerFilterNode::markersCallback, this);
 			} else {
 				ROS_INFO("Unsubscribing from marker msg.");
 				markers_sub_.shutdown();

@@ -36,6 +36,10 @@ pattern_pose_estimation::MarkerDetectorNode::MarkerDetectorNode(
   nh_private_.param ("cache_camera_info", cache_camera_info_, true);
   ROS_INFO_STREAM ("\tCache camera info? " << (cache_camera_info_ ? "true" : "false"));
 
+  std::string marker_msg;
+  nh_private_.param("marker_msg", marker_msg, std::string("ar_pose_markers"));
+  ROS_INFO ("\tMarker Message: %s", marker_msg.c_str());
+
   // lazy subscription
   ros::SubscriberStatusCallback connect_cb;
   if (lazy_)
@@ -48,7 +52,7 @@ pattern_pose_estimation::MarkerDetectorNode::MarkerDetectorNode(
     camera_sub_ = it_.subscribeCamera("image", 0, &MarkerDetectorNode::imageCallback, this);
   }
   // advertise
-  markers_pub_ = nh_.advertise<ar_pose::ARMarkers>("ar_pose_markers", 1, connect_cb, connect_cb);
+  markers_pub_ = nh_.advertise<ar_pose::ARMarkers>(marker_msg, 1, connect_cb, connect_cb);
 }
 
 void pattern_pose_estimation::MarkerDetectorNode::connectCallback(
