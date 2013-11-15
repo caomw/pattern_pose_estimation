@@ -28,6 +28,10 @@ private:
 	bool use_wwf_;				// filter the resultant pose using a weighted window filter (wwf)
 	double ramp_wwf_;			// ramp used for the wwf
 	int num_samples_wwf_;		// number of samples used for the wwf
+	bool xyz_limits_;			// scene filter limits
+	double x_lim_;
+	double y_lim_;
+	double z_lim_;
 
 
 	double * x_array, * y_array, * z_array/*, * roll_array, * pitch_array, * yaw_array*/;
@@ -40,6 +44,7 @@ private:
 	ros::Publisher pose_pub_;
 
 	tf::TransformBroadcaster broadcaster_;
+	tf::Transform prev_transform_;
 
 public:
 
@@ -75,6 +80,15 @@ public:
 
 		nh_priv_.param("marker_msg", marker_msg_, std::string("ar_pose_markers"));
   		ROS_INFO ("\tMarker Message: %s", marker_msg_.c_str());
+
+		nh_priv_.param("xyz_limits", xyz_limits_, false);
+		nh_priv_.param("x_lim", x_lim_, 0.5);
+		nh_priv_.param("y_lim", y_lim_, 0.5);
+		nh_priv_.param("z_lim", z_lim_, 1.2);
+  		ROS_INFO_STREAM ("\tFilter limirs: " << xyz_limits_);
+  		ROS_INFO_STREAM ("\t\tX: " << x_lim_);
+  		ROS_INFO_STREAM ("\t\tY: " << y_lim_);
+  		ROS_INFO_STREAM ("\t\tZ: " << z_lim_);
 
 		if (publish_tf_) {
 			markers_sub_ = nh_.subscribe(marker_msg_, 0, &MarkerFilterNode::markersCallback, this);
@@ -116,7 +130,7 @@ public:
 
 		ros::SubscriberStatusCallback connect_cb = boost::bind(&MarkerFilterNode::connectCallback, this, _1);
 		pose_pub_ = nh_priv_.advertise<geometry_msgs::PoseStamped>("marker_pose", 0, connect_cb, connect_cb);
-
+		prev_transform_.setIdentity();
 	}
 
 	void connectCallback(const ros::SingleSubscriberPublisher&) {
@@ -143,10 +157,24 @@ public:
 
 			pose_pub_.publish(filt_pose);
 			if (publish_tf_) {
+
+				// Sanity check
+				double x = fabs(filt_pose.pose.pose.position.x);
+				double y = fabs(filt_pose.pose.pose.position.y);
+				double z = fabs(filt_pose.pose.pose.position.z);
 				tf::Transform transform;
-				tf::poseMsgToTF(filt_pose.pose.pose, transform);
+				if ((x >= x_lim_ || y >= y_lim_ || z >= z_lim_) && (xyz_limits_))
+				{
+					ROS_WARN("Marker pose outside scene!");
+					transform = prev_transform_;
+				}
+				else
+				{	
+					tf::poseMsgToTF(filt_pose.pose.pose, transform);
+				}				
 				tf::StampedTransform camToMarker(transform, markers_msg->header.stamp, markers_msg->header.frame_id, frame_id_);
 				broadcaster_.sendTransform(camToMarker);
+				prev_transform_ = transform;
 			}
 			//TODO: publish status ko
 		} else {
@@ -315,7 +343,7 @@ public:
 
 			for (unsigned int iterBag = 0; iterBag < markers_msg.markers.size(); iterBag++) { // for all the bags (empty or not)
 
-				printf(" %d", marker_bags[iterBag].size());
+				printf(" %d", (int)(marker_bags[iterBag].size()));
 
 				if (marker_bags[iterBag].size() >= bigBagMarkers) { // the bag is bigger or equal
 					if (marker_bags[iterBag].size() > bigBagMarkers) { // the bag is bigger
