@@ -28,6 +28,9 @@ void paintMarker(cv::Mat& canvas, const ARMarkerInfo& marker_info)
   cv::line(canvas, p2, p3, cv::Scalar(255, 0, 255), 2);
   cv::line(canvas, p3, p4, cv::Scalar(255, 0, 255), 2);
   cv::line(canvas, p4, p1, cv::Scalar(255, 0, 255), 2);
+  cv::Point2d pc;
+  pc.x = marker_info.pos[0]; pc.y = marker_info.pos[1];
+  cv::circle(canvas, pc, 3, cv::Scalar(255, 0, 255), 2);
 }
 
 pattern_pose_estimation::MarkerDetector::MarkerDetector()
@@ -88,6 +91,7 @@ void pattern_pose_estimation::MarkerDetector::loadSettings(ros::NodeHandle& nh)
     double marker_width     = marker_list[i][2];
     double marker_center_x  = marker_list[i][3];
     double marker_center_y  = marker_list[i][4];
+    ROS_INFO_STREAM("Found marker ID: " << marker_id );
     std::string pattern_filename = resolveURL(pattern_url);
     loadMarker(marker_id, pattern_filename,
                marker_width, marker_center_x, marker_center_y);
@@ -137,7 +141,7 @@ void pattern_pose_estimation::MarkerDetector::loadMarker(
   {
     throw MarkerDetectorException("Could not load pattern " + pattern_file_name);
   }
-  marker.id = id;
+  marker.id = id;  ROS_INFO_STREAM("Loading marker ID: " << id);
   marker.width = width * ROS_TO_AR;
   marker.center[0] = x * ROS_TO_AR;
   marker.center[1] = y * ROS_TO_AR;
@@ -242,12 +246,12 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
   int num_detected_markers;
   // we use arDetectMarkerLite here instead of arDetectMarker
   // as the latter uses a history for smoothing
-  if (arDetectMarkerLite(dataPtr, threshold_, 
+  if (arDetectMarker(dataPtr, threshold_, 
         &detected_markers, &num_detected_markers) < 0)
   {
     throw MarkerDetectorException("arDetectMarker failed");
   }
-  ROS_DEBUG("Detected %i markers.", num_detected_markers);
+  ROS_INFO("Detected %i markers.", num_detected_markers);
 
   if (show_debug_image_)
   {
@@ -271,7 +275,7 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
     {
       if (detected_markers[i].id == markers_[m].pattern_id)
       {
-        ROS_DEBUG("Found pattern: %i with confidence %f", 
+        ROS_INFO("Found pattern: %i with confidence %f", 
           markers_[m].pattern_id, detected_markers[i].cf);
       
         if (use_cache && markers_[m].detection_flag == LAST_DETECTED)
