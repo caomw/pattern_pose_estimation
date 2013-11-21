@@ -23,6 +23,12 @@ private:
   void imageCallback(const sensor_msgs::ImageConstPtr& image_msg,
       const sensor_msgs::CameraInfoConstPtr& camera_info);
 
+  inline void timerCallback() { update_thres_ = true; }
+  inline static bool sortByConfidence(const std::pair<double,int> p1, const std::pair<double,int> p2)
+  {
+    return (p1.first > p2.first);
+  }
+
   ros::NodeHandle nh_, nh_private_;
   tf::TransformBroadcaster broadcaster_;
   ros::Publisher markers_pub_;
@@ -41,6 +47,12 @@ private:
   bool rectified_;
   bool lazy_;
 
+  ros::Timer dynamic_thres_timer_;
+  int max_bin_thres_;
+  int min_bin_thres_;
+  int step_bin_thres_;
+  bool update_thres_;
+  int bin_thres_;
 };
 
 } // end of namespace
