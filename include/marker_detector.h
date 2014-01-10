@@ -8,6 +8,8 @@
 #include <sensor_msgs/Image.h>
 #include <ar_pose/ARMarkers.h>
 
+#define DEFAULT_THRESHOLD 100
+
 namespace pattern_pose_estimation
 {
 
@@ -21,7 +23,7 @@ class MarkerDetector
 {
 public:
 
-  static const int DEFAULT_THRESHOLD = 100;
+  //static const int DEFAULT_THRESHOLD = 100;
 
   /**
   * Creates a detector with default values

@@ -1,46 +1,46 @@
-cmake_minimum_required(VERSION 2.4.6)
-include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
+cmake_minimum_required(VERSION 2.8.3)
+project(pattern_pose_estimation)
 
-# Set the build type.  Options are:
-#  Coverage       : w/ debug symbols, w/o optimization, w/ code-coverage
-#  Debug          : w/ debug symbols, w/o optimization
-#  Release        : w/o debug symbols, w/ optimization
-#  RelWithDebInfo : w/ debug symbols, w/ optimization
-#  MinSizeRel     : w/o debug symbols, w/ optimization, stripped binaries
-#set(ROS_BUILD_TYPE RelWithDebInfo)
+find_package(catkin REQUIRED COMPONENTS 
+  roscpp
+  image_transport
+  sensor_msgs
+  tf
+  cv_bridge
+  camera_calibration_parsers
+  libartoolkit
+  message_generation
+  nodelet)
 
-rosbuild_init()
+find_package(OpenCV REQUIRED)
 
-#set the default path for built executables to the "bin" directory
-set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
-#set the default path for built libraries to the "lib" directory
-set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
+add_service_files(
+  DIRECTORY srv
+  FILES DetectMarker.srv)
 
-#uncomment if you have defined messages
-#rosbuild_genmsg()
-#uncomment if you have defined services
-rosbuild_gensrv()
+generate_messages(
+  DEPENDENCIES sensor_msgs ar_pose)
 
-rosbuild_add_library(marker_detection src/marker_detector.cpp 
-                                      src/marker_detector_node.cpp
-                                      src/marker_detector_server.cpp
-                                      src/marker_detector_nodelet.cpp)
+catkin_package()
 
-#common commands for building c++ executables and libraries
-#rosbuild_add_library(${PROJECT_NAME} src/example.cpp)
-#target_link_libraries(${PROJECT_NAME} another_library)
-#rosbuild_add_boost_directories()
-#rosbuild_link_boost(${PROJECT_NAME} thread)
-rosbuild_add_executable(checkerboard_detector_node src/checkerboard_detector_node.cpp)
-rosbuild_add_executable(marker_detector_node src/marker_detector_node_main.cpp)
-rosbuild_add_executable(marker_detector_server src/marker_detector_server_main.cpp)
-rosbuild_add_executable(marker_filter_node src/marker_filter_node.cpp)
+include_directories(include ${OpenCV_INCLUDE_DIRS} ${libartoolkit_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS})
 
-target_link_libraries(marker_detector_node marker_detection AR)
-target_link_libraries(marker_detector_server marker_detection AR)
+add_library(marker_detection src/marker_detector.cpp 
+                             src/marker_detector_node.cpp
+                             src/marker_detector_server.cpp
+                             src/marker_detector_nodelet.cpp)
 
-# unittests
-rosbuild_add_executable(marker_detector_service_test EXCLUDE_FROM_ALL src/test/marker_detector_service_test.cpp)
-rosbuild_add_gtest_build_flags(marker_detector_service_test)
-rosbuild_add_rostest(test/marker_detector_service.test)
+add_executable(checkerboard_detector_node src/checkerboard_detector_node.cpp)
+add_executable(marker_detector_node src/marker_detector_node_main.cpp)
+add_executable(marker_detector_server src/marker_detector_server_main.cpp)
+add_executable(marker_filter_node src/marker_filter_node.cpp)
 
+add_dependencies(marker_detection ar_pose_gencpp)
+add_dependencies(marker_filter_node ar_pose_gencpp)
+add_dependencies(marker_detector_server ar_pose_gencpp)
+
+target_link_libraries(marker_detection ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
+target_link_libraries(checkerboard_detector_node ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
+target_link_libraries(marker_filter_node ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
+target_link_libraries(marker_detector_node marker_detection AR ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
+target_link_libraries(marker_detector_server marker_detection AR ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
