@@ -129,7 +129,7 @@ public:
 		}
 
 		ros::SubscriberStatusCallback connect_cb = boost::bind(&MarkerFilterNode::connectCallback, this, _1);
-		pose_pub_ = nh_priv_.advertise<geometry_msgs::PoseStamped>("marker_pose", 0, connect_cb, connect_cb);
+		pose_pub_ = nh_priv_.advertise<geometry_msgs::PoseWithCovarianceStamped>("marker_pose", 0, connect_cb, connect_cb);
 		prev_transform_.setIdentity();
 	}
 
