@@ -18,6 +18,7 @@ private:
 	// kbags:	cluster the markers with similar pose and get the most confident marker from the biggest bag
 	std::string filter_mode_;
 
+	std::string parent_frame_id_;
 	std::string frame_id_;
 	std::string marker_msg_;
 	bool publish_tf_;
@@ -75,6 +76,9 @@ public:
 		nh_priv_.param("publish_tf", publish_tf_, true);
 		ROS_INFO_STREAM("\tPublish transforms? " << (publish_tf_ ? "true" : "false"));
 
+		nh_priv_.param("parent_frame_id", parent_frame_id_, std::string(""));
+		ROS_INFO("\tParent frame id: %s", parent_frame_id_.c_str());
+
 		nh_priv_.param("frame_id", frame_id_, std::string("marker"));
 		ROS_INFO("\tFrame id: %s", frame_id_.c_str());
 
@@ -129,7 +133,7 @@ public:
 		}
 
 		ros::SubscriberStatusCallback connect_cb = boost::bind(&MarkerFilterNode::connectCallback, this, _1);
-		pose_pub_ = nh_priv_.advertise<geometry_msgs::PoseStamped>("marker_pose", 0, connect_cb, connect_cb);
+		pose_pub_ = nh_priv_.advertise<geometry_msgs::PoseWithCovarianceStamped>("marker_pose", 0, connect_cb, connect_cb);
 		prev_transform_.setIdentity();
 	}
 
@@ -171,8 +175,13 @@ public:
 				else
 				{	
 					tf::poseMsgToTF(filt_pose.pose.pose, transform);
-				}				
-				tf::StampedTransform camToMarker(transform, markers_msg->header.stamp, markers_msg->header.frame_id, frame_id_);
+				}			
+
+				// If no parent frame id, use the marker message
+				if (parent_frame_id_ == "")
+					parent_frame_id_ = markers_msg->header.frame_id;
+
+				tf::StampedTransform camToMarker(transform, markers_msg->header.stamp, parent_frame_id_, frame_id_);
 				broadcaster_.sendTransform(camToMarker);
 				prev_transform_ = transform;
 			}
