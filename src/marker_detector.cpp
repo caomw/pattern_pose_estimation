@@ -96,6 +96,9 @@ void pattern_pose_estimation::MarkerDetector::loadSettings(ros::NodeHandle& nh)
     loadMarker(marker_id, pattern_filename,
                marker_width, marker_center_x, marker_center_y);
   }
+
+  image_transport::ImageTransport it(nh);
+  debug_img_pub_ = it.advertise("debug_image",1);
 }
 
 std::string pattern_pose_estimation::MarkerDetector::resolveURL(const std::string& url) const
@@ -163,7 +166,7 @@ void pattern_pose_estimation::MarkerDetector::setCameraInfo(
   ARParam cam_param;
   cam_param.xsize = camera_info_msg.width;
   cam_param.ysize = camera_info_msg.height;
-  
+
   cam_param.mat[0][0] = camera_info_msg.P[0];
   cam_param.mat[1][0] = camera_info_msg.P[4];
   cam_param.mat[2][0] = camera_info_msg.P[8];
@@ -179,7 +182,7 @@ void pattern_pose_estimation::MarkerDetector::setCameraInfo(
   cam_param.dist_factor[0] = camera_info_msg.K[2];       // x0 = cX from openCV calibration
   cam_param.dist_factor[1] = camera_info_msg.K[5];       // y0 = cY from openCV calibration
   cam_param.dist_factor[3] = 1.0;
-  
+
   if (rectified)
   {
     // no distortion
@@ -225,13 +228,13 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
   markers_msg.header.stamp = image.header.stamp;
   markers_msg.header.frame_id = image.header.frame_id;
 
-  /* 
+  /*
   * NOTE: the dataPtr format is BGR because the ARToolKit library was
-  * build with V4L, dataPtr format change according to the 
+  * build with V4L, dataPtr format change according to the
   * ARToolKit configure option (see config.h).*/
   ARUint8* dataPtr;
-  cv_bridge::CvImageConstPtr cv_ptr;
-  
+  cv_bridge::CvImagePtr cv_ptr;
+
   if (image.encoding == sensor_msgs::image_encodings::BGR8)
   {
     dataPtr = (ARUint8*)&image.data.front();
@@ -246,14 +249,14 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
   int num_detected_markers;
   // we use arDetectMarkerLite here instead of arDetectMarker
   // as the latter uses a history for smoothing
-  if (arDetectMarker(dataPtr, threshold_, 
+  if (arDetectMarker(dataPtr, threshold_,
         &detected_markers, &num_detected_markers) < 0)
   {
     throw MarkerDetectorException("arDetectMarker failed");
   }
   ROS_INFO("Detected %i markers.", num_detected_markers);
 
-  if (show_debug_image_)
+  if (show_debug_image_ || debug_img_pub_.getNumSubscribers() > 0)
   {
     if (!cv_ptr)
     {
@@ -264,8 +267,18 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
     {
       paintMarker(canvas, detected_markers[i]);
     }
-    cv::imshow(DEBUG_WINDOW_NAME, canvas);
-    cv::waitKey(5);
+    if(show_debug_image_)
+    {
+      cv::imshow(DEBUG_WINDOW_NAME, canvas);
+      cv::waitKey(5);
+    }
+    if(debug_img_pub_.getNumSubscribers() > 0)
+    {
+      cv_bridge::CvImagePtr debug_img_ptr(new cv_bridge::CvImage);
+      debug_img_ptr->encoding = cv_ptr->encoding;
+      debug_img_ptr->image = canvas;
+      debug_img_pub_.publish(debug_img_ptr->toImageMsg());
+    }
   }
 
   // identify markers (check for known patterns)
@@ -275,22 +288,22 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
     {
       if (detected_markers[i].id == markers_[m].pattern_id)
       {
-        ROS_INFO("Found pattern: %i with confidence %f", 
+        ROS_INFO("Found pattern: %i with confidence %f",
           markers_[m].pattern_id, detected_markers[i].cf);
-      
+
         if (use_cache && markers_[m].detection_flag == LAST_DETECTED)
         {
-          arGetTransMatCont(&detected_markers[i], 
+          arGetTransMatCont(&detected_markers[i],
               markers_[m].transformation,
               markers_[m].center,
-              markers_[m].width, 
+              markers_[m].width,
               markers_[m].transformation);
         }
         else
         {
-          arGetTransMat(&detected_markers[i], 
-              markers_[m].center, 
-              markers_[m].width, 
+          arGetTransMat(&detected_markers[i],
+              markers_[m].center,
+              markers_[m].width,
               markers_[m].transformation);
         }
         // hack for negative z detection (bad pose calculation)
@@ -328,8 +341,8 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
 void pattern_pose_estimation::MarkerDetector::arTransformationToPose(
     double ar_transformation[3][4], geometry_msgs::Pose& pose)
 {
-  tf::Vector3 translation(ar_transformation[0][3] * AR_TO_ROS, 
-                          ar_transformation[1][3] * AR_TO_ROS, 
+  tf::Vector3 translation(ar_transformation[0][3] * AR_TO_ROS,
+                          ar_transformation[1][3] * AR_TO_ROS,
                           ar_transformation[2][3] * AR_TO_ROS);
   tf::Matrix3x3 rot_mat(ar_transformation[0][0], ar_transformation[0][1], ar_transformation[0][2],
                        ar_transformation[1][0], ar_transformation[1][1], ar_transformation[1][2],

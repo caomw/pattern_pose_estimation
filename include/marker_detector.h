@@ -7,6 +7,7 @@
 #include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/Image.h>
 #include <ar_pose/ARMarkers.h>
+#include <image_transport/image_transport.h>
 
 #define DEFAULT_THRESHOLD 100
 
@@ -50,7 +51,7 @@ public:
   * \param y y-shift of marker center in meters
   * \throws MarkerDetectorException if loading fails.
   */
-  void loadMarker(int marker_id, const std::string& pattern_file_name, double width, 
+  void loadMarker(int marker_id, const std::string& pattern_file_name, double width,
       double x = 0.0, double y = 0.0);
 
   /**
@@ -70,10 +71,10 @@ private:
 
   std::string resolveURL(const std::string& url) const;
 
-  void detectImpl(const sensor_msgs::Image& image, 
+  void detectImpl(const sensor_msgs::Image& image,
       ar_pose::ARMarkers& markers, bool use_cache);
 
-  void arTransformationToPose(double ar_transformation[3][4], 
+  void arTransformationToPose(double ar_transformation[3][4],
       geometry_msgs::Pose& pose);
 
   enum DetectionFlag
@@ -97,6 +98,8 @@ private:
   bool show_debug_image_;
   bool camera_initialized_;
   std::vector<Marker> markers_;
+
+  image_transport::Publisher debug_img_pub_;
 
   static bool has_instance_;
 
