@@ -5,6 +5,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   image_transport
   sensor_msgs
+  std_srvs
   tf
   cv_bridge
   camera_calibration_parsers
@@ -19,7 +20,7 @@ add_service_files(
   FILES DetectMarker.srv)
 
 generate_messages(
-  DEPENDENCIES sensor_msgs ar_pose)
+  DEPENDENCIES sensor_msgs ar_pose std_msgs)
 
 catkin_package()
 

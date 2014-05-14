@@ -51,6 +51,9 @@ pattern_pose_estimation::MarkerDetectorNode::MarkerDetectorNode(
   nh_private_.param("step_bin_thres", step_bin_thres_, 5);
   ROS_INFO_STREAM ("\t\tStep for dynamic binary threshold: " << step_bin_thres_);
 
+  nh_private_.param ("listen_services", listen_services_, false);
+  ROS_INFO_STREAM ("\tListen for services? " << (listen_services_ ? "true" : "false"));
+
   // Create the timer for dynamic threshold update
   update_thres_ = false;
   if (dynamic_thres_rate > 0.0)
@@ -66,6 +69,11 @@ pattern_pose_estimation::MarkerDetectorNode::MarkerDetectorNode(
   {
     connect_cb = boost::bind(&MarkerDetectorNode::connectCallback, this, _1);
   }
+  else if (listen_services_)
+  {
+    ros::ServiceServer start_service = nh_private_.advertiseService("start_detection", &MarkerDetectorNode::startDetection, this);
+    ros::ServiceServer stop_service  = nh_private_.advertiseService("stop_detection", &MarkerDetectorNode::stopDetection, this);
+  }
   else
   {
     ROS_INFO("Subscribing to camera");
@@ -73,6 +81,18 @@ pattern_pose_estimation::MarkerDetectorNode::MarkerDetectorNode(
   }
   // advertise
   markers_pub_ = nh_.advertise<ar_pose::ARMarkers>(marker_msg, 1, connect_cb, connect_cb);
+}
+
+bool pattern_pose_estimation::MarkerDetectorNode::startDetection(
+  std_srvs::Empty::Request& request, std_srvs::Empty::Response& response)
+{
+  camera_sub_ = it_.subscribeCamera("image", 0, &MarkerDetectorNode::imageCallback, this);
+}
+
+bool pattern_pose_estimation::MarkerDetectorNode::stopDetection(
+  std_srvs::Empty::Request& request, std_srvs::Empty::Response& response)
+{
+  camera_sub_.shutdown();
 }
 
 void pattern_pose_estimation::MarkerDetectorNode::connectCallback(
