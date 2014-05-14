@@ -6,6 +6,7 @@
 #include <AR/ar.h>
 
 #include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 
 #include "marker_detector.h"
 
@@ -274,9 +275,14 @@ void pattern_pose_estimation::MarkerDetector::detectImpl(
     }
     if(debug_img_pub_.getNumSubscribers() > 0)
     {
+      // Scale image
+      cv::Mat canvas_scaled;
+      cv::resize(canvas, canvas_scaled, cv::Size(0,0), 0.5, 0.5);
+
+      // Publish
       cv_bridge::CvImagePtr debug_img_ptr(new cv_bridge::CvImage);
       debug_img_ptr->encoding = cv_ptr->encoding;
-      debug_img_ptr->image = canvas;
+      debug_img_ptr->image = canvas_scaled;
       debug_img_pub_.publish(debug_img_ptr->toImageMsg());
     }
   }
