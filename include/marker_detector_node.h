@@ -40,6 +40,9 @@ private:
   image_transport::ImageTransport it_;
   image_transport::CameraSubscriber camera_sub_;
 
+  ros::ServiceServer start_srv_;
+  ros::ServiceServer stop_srv_;
+
   MarkerDetector detector_;
 
   std::string marker_frame_;

@@ -71,8 +71,9 @@ pattern_pose_estimation::MarkerDetectorNode::MarkerDetectorNode(
   }
   else if (listen_services_)
   {
-    ros::ServiceServer start_service = nh_private_.advertiseService("start_detection", &MarkerDetectorNode::startDetection, this);
-    ros::ServiceServer stop_service  = nh_private_.advertiseService("stop_detection", &MarkerDetectorNode::stopDetection, this);
+    ROS_INFO("Advertising services");
+    start_srv_  = nh_private_.advertiseService("start_detection", &MarkerDetectorNode::startDetection, this);
+    stop_srv_  = nh_private_.advertiseService("stop_detection", &MarkerDetectorNode::stopDetection, this);
   }
   else
   {
