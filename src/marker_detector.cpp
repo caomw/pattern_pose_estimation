@@ -184,6 +184,20 @@ void pattern_pose_estimation::MarkerDetector::setCameraInfo(
   cam_param.dist_factor[1] = camera_info_msg.K[5];       // y0 = cY from openCV calibration
   cam_param.dist_factor[3] = 1.0;
 
+  // Correct binning
+  int binning_x = camera_info_msg.binning_x;
+  int binning_y = camera_info_msg.binning_y;
+  if (binning_x > 1 || binning_y > 1)
+  {
+    cam_param.mat[0][0] = cam_param.mat[0][0] / binning_x;
+    cam_param.mat[0][2] = cam_param.mat[0][2] / binning_x;
+    cam_param.mat[1][1] = cam_param.mat[1][1] / binning_y;
+    cam_param.mat[1][2] = cam_param.mat[1][2] / binning_y;
+
+    cam_param.xsize = cam_param.xsize / binning_x;
+    cam_param.ysize = cam_param.ysize / binning_y;
+  }
+
   if (rectified)
   {
     // no distortion
