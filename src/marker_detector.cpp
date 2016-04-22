@@ -165,8 +165,8 @@ void pattern_pose_estimation::MarkerDetector::setCameraInfo(
     bool rectified)
 {
   ARParam cam_param;
-  cam_param.xsize = camera_info_msg.width;
-  cam_param.ysize = camera_info_msg.height;
+  cam_param.xsize = camera_info_msg.roi.width;
+  cam_param.ysize = camera_info_msg.roi.height;
 
   cam_param.mat[0][0] = camera_info_msg.P[0];
   cam_param.mat[1][0] = camera_info_msg.P[4];
